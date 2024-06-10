@@ -11,9 +11,6 @@ import numpy as np
 import trimesh as tr
 import pymeshlab as ml
 
-WDIR = 'D:/ljr1e21/Documents/TIDAL Network+ Project/'
-os.chdir(WDIR)
-
 FOLDER = 'Geometry'
 
 class Mesh():
@@ -78,7 +75,7 @@ def scaling_matrix(scale):
 
 class STLMesh(Mesh):
     """Class for defining file names and locations where they are saved"""
-    def __init__(self, name: str, f_name: str, f_folder: str=WDIR, description: str=None, load: bool=True) -> None:
+    def __init__(self, name: str, f_name: str, f_folder: str, description: str=None, load: bool=True) -> None:
         Mesh.__init__(self, name, f_name, 'stl', f_folder, description)
 
         self.trimesh = None
@@ -285,7 +282,8 @@ class LinerINPMesh(Mesh):
 
         self.rim_nodes = []
         self.num_rim_nodes = None
-        self.rim_nodes_path = os.path.join(WDIR, self.f_folder, 'RimNodes.npy')
+        # TODO: Refactor this to not have WDIR here in this form
+        self.rim_nodes_path = os.path.join()#WDIR, self.f_folder, 'RimNodes.npy')
 
         self.read_inp()
 
@@ -440,7 +438,8 @@ class LinerINPMesh(Mesh):
 
     def save_rim_nodes(self, file_name: str) -> None:
         """Saves the indices and coordinates of the rim nodes in an npy file."""
-        file_path = os.path.join(WDIR, self.f_folder, file_name)
+        # TODO: Refactor this to not include WDIR here
+        file_path = os.path.join()#WDIR, self.f_folder, file_name)
         np.save(file_path, self.rim_nodes)
 
 def cut_meshes(meshes: list[STLMesh],

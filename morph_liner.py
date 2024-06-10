@@ -17,8 +17,9 @@ os.chdir(WDIR)
 
 sys.path.append(os.path.join(WDIR, 'Code'))
 
-from General import MeshObj
+import MeshObj
 import MeshMorphPy_ljr as MeshMorph
+from RBFMorph import RBFMorpher
 
 FOLDER = 'Liner Model'
 LINER_RIM_Y = 200.0
@@ -103,7 +104,7 @@ def morph_liner_internal_surface(unmapped: MeshObj.STLMesh, mapped: MeshObj.STLM
     """Performs the morhphing of the full liner mesh based on the unmapped to
     mapped liner surface meshes."""
     # Generate interpolation matrix and coefficients materix for the morph
-    morph = MeshMorph.RBFMorpher(unmapped, mapped, MeshMorph.custom_RBF)
+    morph = RBFMorpher(unmapped, mapped, MeshMorph.custom_RBF)
 
     inp_liner_mesh = MeshObj.LinerINPMesh('Liner Mesh',
                                           'LinerMesh',
@@ -222,7 +223,7 @@ if __name__ == "__main__":
                                                    output_name='LinerSurfaceVolumeMorphed')
 
     # Morph of the morphed liner mesh based on the second amberg mapping
-    morph = MeshMorph.RBFMorpher(liner_volume_surface_morphed_1,
+    morph = RBFMorpher(liner_volume_surface_morphed_1,
                        liner_volume_surface_mapped, MeshMorph.custom_RBF)
 
     # Morph vertices of the morphed liner mesh with the second morph
