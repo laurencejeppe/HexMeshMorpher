@@ -22,6 +22,8 @@ class Mesh():
         self.f_type = f_type
         self.f_folder = f_folder
         self.f_path = self.path()
+        self.color = [1,1,1]
+        self.opacity = 1.0
 
     def path(self, file_name: str=None, file_type: str=None):
         """Generates the path of the mesh object depending on the f_name and f_type"""
@@ -34,6 +36,12 @@ class Mesh():
         self.f_name = file_name
         self.f_folder = file_folder if file_folder else self.f_folder
         self.f_path = self.path()
+
+    def setColor(self, color):
+        self.color = color
+
+    def setOpacity(self, opacity):
+        self.opasity = opacity
 
 def rot_x(ang):
     """Returns transformation matrix for rotations of ang (deg) about the x axis"""
@@ -86,6 +94,7 @@ class STLMesh(Mesh):
     def load_stl(self) -> None:
         """Loads STL file as trimesh object."""
         self.trimesh = tr.load_mesh(self.path())
+        self.values = np.zeros([len(self.trimesh.vertices)])
 
     def save_trimesh_as_stl(self, name=None) -> None:
         """Saves trimesh object as an STL."""
@@ -255,6 +264,42 @@ class STLMesh(Mesh):
         ]
         rim_nodes['coords'] = interp
         return rim_nodes
+    
+    def getVert(self):
+        r"""
+        Function to return the vert array
+        """
+        return self.trimesh.vertices
+
+    def setVert(self, vert):
+        r"""
+        Function to set the vert array
+        """
+        self.trimesh.vertices = vert
+
+    def getFaces(self):
+        r"""
+        Function to return the faces array
+        """
+        return self.trimesh.faces
+
+    def setFaces(self, faces):
+        r"""
+        Function to set the faces array
+        """
+        self.tirmesh.faces = faces
+
+    def getValues(self):
+        r"""
+        Function to return the values array
+        """
+        return self.values
+
+    def setValues(self, values):
+        r"""
+        Function to set the values array
+        """
+        self.values = values
 
 
 class LinerINPMesh(Mesh):
@@ -263,7 +308,7 @@ class LinerINPMesh(Mesh):
     saving the editted inp file with those edits.
     """
     def __init__(self, name: str, f_name: str, f_folder: str, description: str=None):
-        super().__init__(name=name, f_name=f_name, f_type='inp', f_folder=f_folder, description=description)
+        Mesh.__init__(self, name=name, f_name=f_name, f_type='inp', f_folder=f_folder, description=description)
         # Set stl path
         self.stl_path = self.path(file_type='stl')
 

@@ -18,14 +18,13 @@ os.chdir(WDIR)
 sys.path.append(os.path.join(WDIR, 'Code'))
 
 import MeshObj
-import MeshMorphPy_ljr as MeshMorph
 from RBFMorph import RBFMorpher
 
 FOLDER = 'Liner Model'
 LINER_RIM_Y = 200.0
 
 def load_liner_surface(from_inp: bool=True) -> MeshObj.STLMesh:
-    """This convertes the liner inp file to an stl saves it and returns it
+    """This converts the liner inp file to an stl saves it and returns it
     as an MeshObj.STLMesh object"""
     if from_inp:
         # Load liner surface inp file

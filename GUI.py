@@ -9,10 +9,13 @@ import fnmatch as fnm
 import sys
 import os
 from dataclasses import dataclass
+import vtk
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import (QIcon, QAction)
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QVBoxLayout, QComboBox, QPushButton, QHBoxLayout,
-                             QCheckBox)
+                             QCheckBox, QTableWidget, QTableWidgetItem,
+                             QGridLayout, QMessageBox, QLineEdit, QLabel)
 import MeshObj
 
 class MeshMorpherGUI(QMainWindow):
@@ -22,17 +25,23 @@ class MeshMorpherGUI(QMainWindow):
         self.setWindowTitle("MeshMorphPy")
 
         self.WDIR = os.path.join(os.getcwd(), 'Meshes')
-        os.makedirs(self.WDIR)
+        if not os.path.exists(self.WDIR):
+            os.makedirs(self.WDIR)
 
         self.initUI()
 
     def initUI(self):
         self.mainWidget = QWidget()
+        self.files = {}
+        self.filesDrop = list(self.files.keys())
         self.setCentralWidget(self.mainWidget)
         self.createActions()
         self.createMenus()
 
         self.layout = QVBoxLayout()
+
+        self.file_manager = fileManager()
+        self.layout.addWidget(self.file_manager)
 
         self.open_cdb_btn = QPushButton("Open CDB")
 
@@ -66,8 +75,47 @@ class MeshMorpherGUI(QMainWindow):
         self.save_inp_btn.clicked.connect(self.chooseSaveFile)
 
         self.mainWidget.setLayout(self.layout)
-        self.resize(200,200)
+        self.resize(600,600)
         self.show()
+
+    def createActions(self):
+        self.openFile = QAction(QIcon('open.png'), 'Open', self,
+                                shortcut='Ctrl+O',
+                                triggered=self.chooseOpenFile)
+        self.openQUADmesh = QAction(QIcon('open.png'), 'Open QUAD', self,
+                                    triggered=self.load_quad_mesh)
+        self.choose_wdir = QAction(QIcon('open.png'), 'Choose Working Directory',
+                                  self, triggered=self.choose_WDIR)
+        self.saveFile = QAction(QIcon('open.png'), 'Save', self,
+                                shortcut='Ctrl+S',
+                                triggered=self.chooseSaveFile)
+        self.exitAct = QAction("E&xit", self, shortcut="Ctrl+Q",
+                               triggered=self.close)
+        self.runAmberg = QAction(QIcon('open.png'), 'Run Amberg',
+                                 self, triggered=self.run_amberg_mapping)
+        self.openMorphOptions = QAction(QIcon("open.png"), 'Morph Options',
+                                        self, triggered=self.open_morph_options)
+
+
+    def createMenus(self):
+        """
+        Numpy style docstring.
+        """
+        self.fileMenu = self.menuBar().addMenu("&File")
+        self.fileMenu.addAction(self.openFile)
+        self.fileMenu.addAction(self.openQUADmesh)
+        self.fileMenu.addAction(self.choose_wdir)
+        self.fileMenu.addAction(self.saveFile)
+        self.fileMenu.addSeparator()
+        self.fileMenu.addAction(self.exitAct)
+        self.amberg_nricp_menu = self.menuBar().addMenu("&Amberg")
+        self.amberg_nricp_menu.addAction(self.runAmberg)
+        self.morph_menu = self.menuBar().addMenu("&Morph Options")
+        self.morph_menu.addAction(self.openMorphOptions)
+
+    
+    def open_morph_options(self):
+        print('You have tried to open the morph options menu!')
 
 
     def chooseOpenFile(self):
@@ -84,6 +132,7 @@ class MeshMorpherGUI(QMainWindow):
             return
         self.cdb_file = fname[0]
         self.read_cdb()
+    
 
     def chooseSaveFile(self):
         fname = QFileDialog.getSaveFileName(self,
@@ -99,158 +148,13 @@ class MeshMorpherGUI(QMainWindow):
         #except AttributeError:
         #    print('A point has not been selected')
 
-    def createActions(self):
-        self.openFile = QAction(QIcon('open.png'), 'Open', self,
-                                shortcut='Ctrl+O',
-                                triggered=self.chooseOpenFile)
-        self.openQUADmesh = QAction(QIcon('open.png'), 'Open QUAD', self,
-                                    triggered=self.load_quad_mesh('QUAD_Mesh'))
-        self.choose_wdir = QAction(QIcon(122), 'Choose Working Directory',
-                                  self, triggered=self.choose_WDIR)
-        self.saveFile = QAction(QIcon('open.png'), 'Save', self,
-                                shortcut='Ctrl+S',
-                                triggered=self.chooseSaveFile)
-        self.exitAct = QAction("E&xit", self, shortcut="Ctrl+Q",
-                               triggered=self.close)
-
-
-    def createMenus(self):
-        """
-        Numpy style docstring.
-        """
-        self.fileMenu = self.menuBar().addMenu("&File")
-        self.fileMenu.addAction(self.openFile)
-        self.fileMenu.addAction(self.openQUADmesh)
-        self.fileMenu.addAction(self.choose_wdir)
-        self.fileMenu.addAction(self.saveFile)
-        self.fileMenu.addSeparator()
-        self.fileMenu.addAction(self.exitAct)
-
     def choose_WDIR(self):
         _dir = QFileDialog.getExistingDirectory(self,
                                                 'Select Directory',
                                                 directory=self.WDIR)
-        self.WDIR = dir
+        self.WDIR = _dir
 
-    def write_inp(self):
-        self.title = self.inp_file.split('/')[-1][:-4]
-        # Creating inp file
-        self.nod_head = '*NODE\n'
-        self.ell_head = '*ELEMENT, TYPE=' + self.element_type_CB.currentText() + ', ELSET=PT_' + self.title + '\n'
-
-        for i, _set in enumerate(self.sets):
-            self.sets[i].el_type = self.element_type_CB.currentText()
-
-        # Open/Create new inp file and write main heading
-        with open(self.inp_file, 'w', encoding='utf-8') as output:
-
-            for _set in self.sets:
-                output.write(_set.mat_head())
-
-            # Write node data
-            self.writeNodeData(output, self.nod_head, self.NODE_DATA)
-
-            # Write element data
-            for _set in self.sets:
-                output.write(_set.get_elset_output())
-
-            # Write the nodeset data
-            for _set in self.sets:
-                output.write(_set.get_nset_output())
-
-        print('Successfully written .inp file!')
-
-    def NUMOFF(self, ellnod):
-        # ellnod is string with 'NODE' for node count or 'ELEM' for element count
-        Index = self.findIndex('NUMOFF,' + ellnod)
-        NUMOFF = int(self.cdb_list[Index[0]].split(',')[-1].strip())
-        return NUMOFF
-
-    def findIndex(self, key_word_input):
-        """Finds the index of the occurances of a specified keyword."""
-        wildcard = '*'
-        Instance = fnm.filter(self.cdb_list, key_word_input + wildcard)
-        Index = []
-        if len(Instance) > 0:
-            for instance in Instance:
-                Index.append(self.cdb_list.index(instance))
-            return Index
-        else:
-            print('No ' + key_word_input + ' found, check the output file for completeness!')
-            return
-
-    def writeNodeData(self, output, header, DATA):
-        output.write(header)
-        count = 0
-        for i, D in enumerate(DATA):
-            for j, d in enumerate(D):
-                if DATA[i][j] == '':
-                    DATA[i][i] = '0.0000000000000E+000'
-                    print(DATA[i])
-                    count += 1
-                if self.convertUnits.checkState() and j > 0:
-                    d = self.convertString_mm_to_m(d)
-                output.write(d)
-                if j != len(DATA[0])-1:
-                    output.write(',')
-            output.write('\n')
-
-    def convertString_mm_to_m(self, string):
-        print(string)
-        l = string.split('.')
-        print(l)
-        l1 = l[0] + l[1][0:3]
-        l2 = l[1][3:]
-        return l1 + '.' + l2
-
-    @dataclass
-    class Set:
-        """Class for holding the data for an element set.
-        Data is a dictionary with the element number as the key and list of
-        corresponding nodes as the data."""
-        name: str
-        el_type: str = None
-        el_data: dict = None
-        nodes: list = None
-
-        def get_elset_output(self) -> str:
-            """Creates the string to be written to the output file for the element set."""
-            _list = []
-            _list.append(f'*ELEMENT, TYPE={self.el_type}, ELSET={self.name}\n')
-            for element in self.el_data:
-                line = f"{element}, {', '.join(self.el_data[element])}\n"
-                _list.append(line)
-            return ''.join(_list)
-
-        def get_nset_output(self) -> str:
-            """Creates string to be written to the output file for the node set."""
-            _list = []
-            _list.append(f'*NSET, NSET={self.name}, internal')
-            num_lines = round((len(self.nodes) / 16) + 1)
-            x = 1
-            for i in range(num_lines):
-                if i == num_lines - 1:
-                    x = 0
-                string = ', '.join(self.nodes[i*16:(i*16+16+1)*x-1])
-                _list.append(string)
-            return '\n'.join(_list) + '\n'
-        
-        def get_nodes(self) -> None:
-            for element in self.el_data:
-                for node in self.el_data[element]:
-                    self.nodes.append(node)
-            self._remove_duplicate_nodes()
-
-        def _remove_duplicate_nodes(self) -> None:
-            self.nodes =  list( dict.fromkeys(self.nodes) )
-            for element in self.el_data:
-                self.el_data[element] = list( dict.fromkeys(self.el_data[element]))
-
-        def mat_head(self) -> str:
-            return f'*SOLID SECTION, ELSET={self.name}, MATERIAL=PM_{self.name}\n*MATERIAL, NAME=PM_{self.name}\n'
-
-
-    def load_quad_mesh(self, mesh_name: str) -> MeshObj.STLMesh:
+    def load_quad_mesh(self) -> MeshObj.STLMesh:
         """
         This is used to load a quad mesh created as either an stl or inp.
         If an inp is selected it will save it as an stl and load the stl.
@@ -266,28 +170,187 @@ class MeshMorpherGUI(QMainWindow):
 
         if fname[0] == '':
             return
-        file_name = fname[0]
+        file_path = fname[0]
+        file_folder_list = file_path[:-4].split('/')[:-1]
+        file_folder_list[0] = file_folder_list[0] + '/'
+        file_folder = os.path.join(*file_folder_list)
+        file_name = file_path[:-4].split('/')[-1]
 
-        if file_name[-4:] == '.inp':
+        if file_path[-4:] == '.inp':
             # Load liner surface inp file
-            liner_surface_inp = MeshObj.LinerINPMesh(mesh_name, mesh_name,
-                                                     os.path.join(self.WDIR, mesh_name),
-                                                     description='Unmorphed liner inp surface mesh')
+            liner_surface_inp = MeshObj.LinerINPMesh(file_name, file_name,
+                                                     file_folder)
+            liner_surface_inp.rename(file_name, self.WDIR)
             liner_surface_inp.write_stl()   # Save as stl
-            # Load liner surface stl file
-            liner_s = MeshObj.STLMesh(mesh_name, mesh_name,
-                                      os.path.join(self.WDIR, mesh_name),
-                                      description='Unmorphed liner surface mesh')
-        elif file_name[-4:] == '.stl':
-            # Load liner surface stl file
-            liner_s = MeshObj.STLMesh(mesh_name, mesh_name,
-                                      os.path.join(self.WDIR, mesh_name),
-                                      description='Unmorphed liner surface mesh')
-        else:
+            file_folder = self.WDIR
+        elif file_path[-4:] != '.stl':
             return
-        return liner_s
+        
+        # Load surface stl file
+        self.files[file_name] = MeshObj.STLMesh(file_name, file_name,
+                                                file_folder)
+        mesh_obj = self.files[file_name]
+        self.file_manager.addRow(file_name, mesh_obj)
+        self.filesDrop.append(file_name)
+
+    def run_amberg_mapping(self):
+        self.amberg_nricp = ambergOptions()
+        self.amberg_nricp.show()
 
 
+class ambergOptions(QMainWindow):
+    def __init__(self, parent = None):
+        super(ambergOptions, self).__init__(parent)
+        self.setWindowTitle("Amberg Mapping")
+        self.mainWidget = QWidget()
+        self.setCentralWidget(self.mainWidget)
+
+        # Table to view loop options
+        self.layout = QGridLayout()
+        self.table = QTableWidget()
+        self.table.setRowCount(4)
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(['Stiffness', 'Landmarks', 'Rigid Transformation', 'Iterations'])
+        self.n = self.table.rowCount()
+        self.layout.addWidget(self.table, 0, 0)
+
+        # Buttons to edit table
+        self.table_edit_layout = QVBoxLayout()
+        self.add_loop = QPushButton("Add Loop")
+        self.table_edit_layout.addWidget(self.add_loop)
+        self.del_loop = QPushButton("Delete Loop")
+        self.table_edit_layout.addWidget(self.del_loop)
+        self.edit_loop = QPushButton("Edit Loop")
+        self.table_edit_layout.addWidget(self.edit_loop)
+        self.layout.addLayout(self.table_edit_layout, 0, 1)
+
+        # Options with checkboxes
+        self.options_layout = QGridLayout()
+        self.use_faces = QCheckBox()
+        self.use_faces.setText("Use Faces")
+        self.options_layout.addWidget(self.use_faces, 0, 0)
+        self.use_landmarks = QCheckBox()
+        self.use_landmarks.setText("Use Landmarks")
+        self.options_layout.addWidget(self.use_landmarks, 0, 1)
+        self.epsilon_text = QLabel("Epsilon")
+        self.options_layout.addWidget(self.epsilon_text, 1, 0)
+        self.epsilon_edit = QLineEdit()
+        self.epsilon_edit.setPlaceholderText("0.001")
+        self.options_layout.addWidget(self.epsilon_edit, 1, 1)
+        self.gamma_text = QLabel("Gamma")
+        self.options_layout.addWidget(self.gamma_text, 2, 0)
+        self.gamma_edit = QLineEdit()
+        self.gamma_edit.setPlaceholderText("1")
+        self.options_layout.addWidget(self.gamma_edit, 2, 1)
+        self.neighbors_text = QLabel("Neighbors")
+        self.options_layout.addWidget(self.neighbors_text, 3, 0)
+        self.neighbors_edit = QLineEdit()
+        self.neighbors_edit.setPlaceholderText("8")
+        self.options_layout.addWidget(self.neighbors_edit, 3, 1)
+        self.distance_text = QLabel("Distance Threshold")
+        self.options_layout.addWidget(self.distance_text, 4, 0)
+        self.distance_edit = QLineEdit()
+        self.distance_edit.setPlaceholderText("0.1")
+        self.options_layout.addWidget(self.distance_edit, 4, 1)
+        self.layout.addLayout(self.options_layout, 1, 0)
+
+        self.run_amberg_btn = QPushButton("Run Amberg Mapping")
+        self.layout.addWidget(self.run_amberg_btn, 2, 0)
+
+        self.mainWidget.setLayout(self.layout)
+
+        self.resize(520,400)
+
+        # TODO: Add signals and controls for all of the above
+        # TODO: Add mesh selection combobox
+
+
+class fileManager(QWidget):
+    """
+    Controls to manage the displayed 
+    
+    Example
+    -------
+    Perhaps an example implementation:
+
+    >>> from GUIs.ampscanGUI import ampscanGUI
+
+    """
+
+    def __init__(self, parent = None):
+        super(fileManager, self).__init__(parent)
+        self.table = QTableWidget()
+        self.layout = QGridLayout()
+        self.layout.addWidget(self.table, 0, 0)
+        self.setLayout(self.layout)
+        self.table.setRowCount(0)
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(['Name', 'Type', 'Colour', 'Opacity', 'Display'])
+        self.n = self.table.rowCount()
+        # Set the minimum table size to when it is fully expanded
+        self.table.setMinimumWidth(self.table.frameWidth()*2
+                                   + self.table.horizontalHeader().length()
+                                   + self.table.verticalHeader().width())
+
+    def addRow(self, name, amp):
+        self.table.insertRow(self.n)
+        self.table.setItem(self.n, 0, QTableWidgetItem(name))
+        self.table.setItem(self.n, 1, QTableWidgetItem(amp.f_type))
+        self.table.setItem(self.n, 2, QTableWidgetItem(str(amp.color)))
+        self.table.setItem(self.n, 3, QTableWidgetItem(str(amp.opacity)))
+        chkBoxItem = QTableWidgetItem()
+        chkBoxItem.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        chkBoxItem.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+        chkBoxItem.setCheckState(Qt.CheckState.Checked)
+
+        self.table.setItem(self.n,4,chkBoxItem)
+        self.n = self.table.rowCount()
+
+    def getRow(self, i):
+        row = []
+        for r in range(self.table.columnCount() - 1):
+            row.append(self.table.item(i, r).text())
+        row.append(self.table.item(i, r+1).checkState())
+        return row
+
+    def setTable(self, name, color = [1.0, 1.0, 1.0], opacity=1.0, display=2):
+        for i in range(self.n):
+            if self.table.item(i, 0).text() == name:
+                self.table.item(i, 2).setText(str(color))
+                self.table.item(i, 3).setText(str(opacity))
+                self.table.item(i, 4).setCheckState(display)
+
+def show_message(message, message_type="err", title="An Error Occured..."):
+    """
+    Parameters
+    ----------
+    message : string
+        The message to be displayed
+    message_type : string
+        The type of message e.g. "err" or "info"
+    title : string
+        The title of the dialog window
+
+    Examples
+    --------
+    >>> show_message("test")
+    >>> show_message("test2", "info", "test")
+
+    """
+    dialog = QMessageBox()
+    dialog.setText(message)
+    dialog.setWindowTitle(title)
+    icons = {
+        "err": QMessageBox.Critical,
+        "info": QMessageBox.Information
+    }
+    dialog.setIcon(icons[message_type])
+    dialog.setStandardButtons(QMessageBox.Ok)
+
+    # Makes sure doesn't close until user closes it
+    dialog.exec_()
+
+    return dialog
 
 if __name__=="__main__":
     app = QApplication(sys.argv)
