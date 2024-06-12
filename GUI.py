@@ -5,11 +5,8 @@ Created on Wed Apr  5 19:29:14 2023
 @author: ljr1e21
 """
 
-import fnmatch as fnm
 import sys
 import os
-from dataclasses import dataclass
-import vtk
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import (QIcon, QAction)
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
@@ -17,6 +14,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QCheckBox, QTableWidget, QTableWidgetItem,
                              QGridLayout, QMessageBox, QLineEdit, QLabel)
 import MeshObj
+import amberg_mapping
 
 class MeshMorpherGUI(QMainWindow):
     def __init__(self):
@@ -194,7 +192,7 @@ class MeshMorpherGUI(QMainWindow):
         self.filesDrop.append(file_name)
 
     def run_amberg_mapping(self):
-        self.amberg_nricp = ambergOptions()
+        self.amberg_nricp = ambergOptions(self)
         self.amberg_nricp.show()
 
 
@@ -204,6 +202,8 @@ class ambergOptions(QMainWindow):
         self.setWindowTitle("Amberg Mapping")
         self.mainWidget = QWidget()
         self.setCentralWidget(self.mainWidget)
+        self.files = parent.files
+        self.WDIR = parent.WDIR
 
         # Table to view loop options
         self.layout = QGridLayout()
@@ -211,6 +211,8 @@ class ambergOptions(QMainWindow):
         self.table.setRowCount(4)
         self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(['Stiffness', 'Landmarks', 'Rigid Transformation', 'Iterations'])
+        self.table.setCurrentCell(1,3)
+        self.table.setItem(1,2,1)
         self.n = self.table.rowCount()
         self.layout.addWidget(self.table, 0, 0)
 
@@ -252,9 +254,22 @@ class ambergOptions(QMainWindow):
         self.distance_edit = QLineEdit()
         self.distance_edit.setPlaceholderText("0.1")
         self.options_layout.addWidget(self.distance_edit, 4, 1)
+        self.source_text = QLabel("Source Mesh")
+        self.options_layout.addWidget(self.source_text, 5, 0)
+        self.source = QComboBox()
+        self.source.addItems(self.files)
+        self.setStyleSheet("QComboBox {text-align: center;}")
+        self.options_layout.addWidget(self.source, 5, 1)
+        self.target_text = QLabel("Target Mesh")
+        self.options_layout.addWidget(self.target_text, 6, 0)
+        self.target = QComboBox()
+        self.target.addItems(self.files)
+        self.options_layout.addWidget(self.target, 6, 1)
+
         self.layout.addLayout(self.options_layout, 1, 0)
 
         self.run_amberg_btn = QPushButton("Run Amberg Mapping")
+        self.run_amberg_btn.clicked.connect(self.initiate_amberg)
         self.layout.addWidget(self.run_amberg_btn, 2, 0)
 
         self.mainWidget.setLayout(self.layout)
@@ -263,6 +278,25 @@ class ambergOptions(QMainWindow):
 
         # TODO: Add signals and controls for all of the above
         # TODO: Add mesh selection combobox
+
+    def initiate_amberg(self):
+        # TODO: Run checks to see if there are two different meshes selected for the morphing.
+        # TODO: Get information from all the options
+        source = self.files[self.source.currentText()]
+        target = self.files[self.target.currentText()]
+        output = MeshObj.STLMesh('Mapped Liner Surface Mesh',
+                                 'MappedMesh',
+                                 f_folder=self.WDIR,
+                                 load=False)
+        runs = self.table.rowCount()
+        for row in range(runs):
+            for i in range(4):
+                print(self.table.item(row, i).text())
+
+        # TODO: Call the amberg_mapping.py
+        #amberg_mapping.AmbergMapping(source, target, output, steps, options)
+
+
 
 
 class fileManager(QWidget):
