@@ -19,19 +19,25 @@ class AmbergMapping:
         self.source = sourcey
         self.target = targety
         self.mapped = mappedy
+        self.gamma = 1
+        self.epsilon = 0.001
+        self.neighbors_count = 8
+        self.distance_threshold = 0.1
+        self.use_faces = False # Changing to True causes error (installed rtree with pip to solve)
+        self.use_landmarks = False
+        ops = {
+            'gamma':self.gamma,
+            'epsilon':self.epsilon,
+            'neighbors':self.neighbors_count,
+            'distance_threshold':self.distance_threshold,
+            'use_faces':self.use_faces,
+            'use_landmarks':self.use_landmarks,
+        }
+        print(options)
         if options:
-            self.gamma = options['gamma'] if options['gamma'] else 1
-            self.epsilon = options['epsilon'] if options['epsilon'] else 0.001
-            # Suggested epsilon is 0.000001
-            self.neighbors_count = options['neighbors_count'] \
-                if options['neighbors_count'] else 8 # Default is 8
-            # Suggested is 3
-            self.distance_threshold = options['distance_threshold'] \
-                if options['distance_threshold'] else 0.1
-            self.use_faces = options['use_faces'] if options['use_faces'] \
-                else False
-            # Changing to True causes error (installed rtree with pip to solve)
-
+            for item in ops:
+                if item in options: ops[item] = options[item]
+        
         if steps:
             self.steps = steps
         else:
@@ -52,7 +58,7 @@ class AmbergMapping:
 
     def run_amberg(self):
         """Runs the amberg mapping."""
-        if self.landmark_pairs:
+        if self.use_landmarks:
             source_indices = [pair[0] for pair in self.landmark_pairs]
             target_points = [pair[1] for pair in self.landmark_pairs]
 

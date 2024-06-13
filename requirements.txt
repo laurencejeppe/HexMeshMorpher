@@ -4,4 +4,5 @@ pymeshlab==2023.12.post1
 PyQt6==6.7.0
 PyQt6-Qt6==6.7.1
 PyQt6-sip==13.6.0
+scipy==1.13.1
 trimesh==4.4.1

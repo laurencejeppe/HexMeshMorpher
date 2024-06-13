@@ -12,7 +12,8 @@ from PyQt6.QtGui import (QIcon, QAction)
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QVBoxLayout, QComboBox, QPushButton, QHBoxLayout,
                              QCheckBox, QTableWidget, QTableWidgetItem,
-                             QGridLayout, QMessageBox, QLineEdit, QLabel)
+                             QGridLayout, QMessageBox, QLineEdit, QLabel,
+                             QHeaderView)
 import MeshObj
 import amberg_mapping
 
@@ -27,6 +28,9 @@ class MeshMorpherGUI(QMainWindow):
             os.makedirs(self.WDIR)
 
         self.initUI()
+        self.load_test_mesh("Offset mesh 3_m")
+        self.load_test_mesh("Torso_noears_m")
+
 
     def initUI(self):
         self.mainWidget = QWidget()
@@ -151,8 +155,17 @@ class MeshMorpherGUI(QMainWindow):
                                                 'Select Directory',
                                                 directory=self.WDIR)
         self.WDIR = _dir
+    
+    def load_test_mesh(self, file_name):
+        # Load surface stl file
+        self.files[file_name] = MeshObj.STLMesh(file_name, file_name,
+                                                self.WDIR)
+        mesh_obj = self.files[file_name]
+        self.file_manager.addRow(file_name, mesh_obj)
+        self.filesDrop.append(file_name)
 
-    def load_quad_mesh(self) -> MeshObj.STLMesh:
+
+    def load_quad_mesh(self):
         """
         This is used to load a quad mesh created as either an stl or inp.
         If an inp is selected it will save it as an stl and load the stl.
@@ -202,28 +215,32 @@ class ambergOptions(QMainWindow):
         self.setWindowTitle("Amberg Mapping")
         self.mainWidget = QWidget()
         self.setCentralWidget(self.mainWidget)
+        self.parent = parent
         self.files = parent.files
         self.WDIR = parent.WDIR
 
         # Table to view loop options
         self.layout = QGridLayout()
         self.table = QTableWidget()
-        self.table.setRowCount(4)
         self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(['Stiffness', 'Landmarks', 'Rigid Transformation', 'Iterations'])
-        self.table.setCurrentCell(1,3)
-        self.table.setItem(1,2,1)
-        self.n = self.table.rowCount()
+        #self.table.setCurrentCell(1,3)
+        self.set_step_table_defaults()
+        self.table.horizontalHeader().setCascadingSectionResizes(True)
+        self.set_step_table_sizing()
         self.layout.addWidget(self.table, 0, 0)
 
         # Buttons to edit table
         self.table_edit_layout = QVBoxLayout()
-        self.add_loop = QPushButton("Add Loop")
-        self.table_edit_layout.addWidget(self.add_loop)
-        self.del_loop = QPushButton("Delete Loop")
-        self.table_edit_layout.addWidget(self.del_loop)
-        self.edit_loop = QPushButton("Edit Loop")
-        self.table_edit_layout.addWidget(self.edit_loop)
+        self.add_loop_btn = QPushButton("Add Loop")
+        self.add_loop_btn.clicked.connect(self.add_loop)
+        self.table_edit_layout.addWidget(self.add_loop_btn)
+        self.del_loop_btn = QPushButton("Delete Loop")
+        self.del_loop_btn.clicked.connect(self.del_loop)
+        self.table_edit_layout.addWidget(self.del_loop_btn)
+        #self.edit_loop_btn = QPushButton("Edit Loop")
+        #self.table_edit_layout.addWidget(self.edit_loop_btn)
+        self.table_edit_layout.addStretch()
         self.layout.addLayout(self.table_edit_layout, 0, 1)
 
         # Options with checkboxes
@@ -237,21 +254,25 @@ class ambergOptions(QMainWindow):
         self.epsilon_text = QLabel("Epsilon")
         self.options_layout.addWidget(self.epsilon_text, 1, 0)
         self.epsilon_edit = QLineEdit()
+        self.epsilon_edit.setInputMask("9")
         self.epsilon_edit.setPlaceholderText("0.001")
         self.options_layout.addWidget(self.epsilon_edit, 1, 1)
         self.gamma_text = QLabel("Gamma")
         self.options_layout.addWidget(self.gamma_text, 2, 0)
         self.gamma_edit = QLineEdit()
+        self.gamma_edit.setInputMask("9")
         self.gamma_edit.setPlaceholderText("1")
         self.options_layout.addWidget(self.gamma_edit, 2, 1)
         self.neighbors_text = QLabel("Neighbors")
         self.options_layout.addWidget(self.neighbors_text, 3, 0)
         self.neighbors_edit = QLineEdit()
+        self.neighbors_edit.setInputMask("9")
         self.neighbors_edit.setPlaceholderText("8")
         self.options_layout.addWidget(self.neighbors_edit, 3, 1)
         self.distance_text = QLabel("Distance Threshold")
         self.options_layout.addWidget(self.distance_text, 4, 0)
         self.distance_edit = QLineEdit()
+        self.distance_edit.setInputMask("9")
         self.distance_edit.setPlaceholderText("0.1")
         self.options_layout.addWidget(self.distance_edit, 4, 1)
         self.source_text = QLabel("Source Mesh")
@@ -279,22 +300,89 @@ class ambergOptions(QMainWindow):
         # TODO: Add signals and controls for all of the above
         # TODO: Add mesh selection combobox
 
+    def set_step_table_defaults(self) -> None:
+        step_defaults = [
+            [0.01, 0, 0.5, 10],
+            [0.02, 2, 0.5, 10],
+            [0.03, 5, 0.5, 10],
+            [0.01, 8, 0.5, 10],
+            [0.005, 10, 0.5, 10],
+        ]
+        self.table.setRowCount(len(step_defaults))
+        for r, row in enumerate(step_defaults):
+            for c, item in enumerate(row):
+                self.table.setItem(r,c,QTableWidgetItem(str(item)))
+
+    def set_step_table_sizing(self):
+        self.table.resizeColumnsToContents()
+        rows = self.table.rowCount()
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    
+    def add_loop(self):
+        default_row = [0.01, 0, 0.5, 10]
+        if self.table.currentRow():
+            row = self.table.currentRow()
+        else:
+            row = self.table.rowCount()
+        self.table.insertRow(row)
+        for i, item in enumerate(default_row):
+            self.table.setItem(row, i, QTableWidgetItem(str(item)))
+
+    def del_loop(self):
+        if self.table.currentRow():
+            self.table.removeRow(self.table.currentRow())
+        else:
+            self.pop_up_info_dialog("Please select a row to be deleted first!")
+
+    def pop_up_info_dialog(self, message):
+        dialog = QMessageBox()
+        dialog.setText(message)
+        dialog.exec()
+    
     def initiate_amberg(self):
         # TODO: Run checks to see if there are two different meshes selected for the morphing.
         # TODO: Get information from all the options
+        if self.source.count() < 2:
+            self.pop_up_info_dialog("You need at least two meshes to perform an Amberg Mapping!")
+            # For testing perposes add 
+            self.target.setCurrentIndex(1)
+            #return # TODO: Make this a return and delete above test file imports
         source = self.files[self.source.currentText()]
         target = self.files[self.target.currentText()]
         output = MeshObj.STLMesh('Mapped Liner Surface Mesh',
                                  'MappedMesh',
                                  f_folder=self.WDIR,
                                  load=False)
-        runs = self.table.rowCount()
-        for row in range(runs):
-            for i in range(4):
-                print(self.table.item(row, i).text())
+        rows = self.table.rowCount()
+        steps = [[None for i in range(4)] for j in range(rows)]
+        for row in range(rows):
+            for col in range(4):
+                steps[row][col] = float(self.table.item(row, col).text())
+        e = float(self.epsilon_edit.text()) if self.epsilon_edit.hasAcceptableInput() else 0.001
+        g = float(self.gamma_edit.text()) if self.gamma_edit.hasAcceptableInput() else 1
+        n = int(self.neighbors_edit.text()) if self.neighbors_edit.hasAcceptableInput() else 8
+        d = float(self.distance_edit.text()) if self.distance_edit.hasAcceptableInput() else 0.1
+        f = self.use_faces.isChecked()
+        l = self.use_landmarks.isChecked()
 
-        # TODO: Call the amberg_mapping.py
-        #amberg_mapping.AmbergMapping(source, target, output, steps, options)
+        options = {
+            'gamma':g,
+            'epsilon':e,
+            'neighbors_count':n,
+            'distance_threshold':d,
+            'use_faces':f,
+            'use_landmarks':l,
+        }
+
+        AM = amberg_mapping.AmbergMapping(sourcey=source, targety=target, mappedy=output, steps=steps, options=options)
+        output_mesh = AM.mapped
+        self.parent.files[output_mesh.f_name] = output_mesh
+        self.parent.file_manager.addRow(output_mesh.f_name, output_mesh)
+        self.filesDrop.append(output_mesh.f_name)
+        self.exec()
 
 
 
