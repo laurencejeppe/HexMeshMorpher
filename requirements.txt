@@ -1,0 +1,7 @@
+msvc_runtime==14.40.33807
+numpy==1.26.4
+pymeshlab==2023.12.post1
+PyQt6==6.7.0
+PyQt6-Qt6==6.7.1
+PyQt6-sip==13.6.0
+trimesh==4.4.1
