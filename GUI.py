@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QHeaderView)
 import MeshObj
 import amberg_mapping
+import RBF_morpher
 
 class MeshMorpherGUI(QMainWindow):
     def __init__(self):
@@ -45,36 +46,11 @@ class MeshMorpherGUI(QMainWindow):
         self.file_manager = fileManager()
         self.layout.addWidget(self.file_manager)
 
-        self.open_cdb_btn = QPushButton("Open CDB")
+        self.open_cdb_btn = QPushButton("Open QUAD Mesh")
 
         self.layout.addWidget(self.open_cdb_btn)
 
-        self.open_cdb_btn.clicked.connect(self.chooseOpenFile)
-
-        self.hlayout = QHBoxLayout()
-        self.hlayout.addStretch()
-
-        # Element type selections
-        self.element_type_CB = QComboBox()
-        self.element_type_CB.addItems(['S4','S8R','C3D8', 'C3D4'])
-        self.setStyleSheet("QComboBox {text-align: center;}")
-        self.hlayout.addWidget(self.element_type_CB)
-
-        self.hlayout.addStretch()
-
-        # Unit converter
-        self.convertUnits = QCheckBox()
-        self.convertUnits.setText("Convert mm to m")
-        self.hlayout.addWidget(self.convertUnits)
-        self.hlayout.addStretch()
-
-        self.layout.addLayout(self.hlayout)
-
-        self.save_inp_btn = QPushButton("Save INP")
-
-        self.layout.addWidget(self.save_inp_btn)
-
-        self.save_inp_btn.clicked.connect(self.chooseSaveFile)
+        self.open_cdb_btn.clicked.connect(self.load_quad_mesh)
 
         self.mainWidget.setLayout(self.layout)
         self.resize(600,600)
@@ -95,8 +71,10 @@ class MeshMorpherGUI(QMainWindow):
                                triggered=self.close)
         self.runAmberg = QAction(QIcon('open.png'), 'Run Amberg',
                                  self, triggered=self.run_amberg_mapping)
-        self.openMorphOptions = QAction(QIcon("open.png"), 'Morph Options',
-                                        self, triggered=self.open_morph_options)
+        self.runRBF = QAction(QIcon("open.png"), 'Run RBF Morpher',
+                              self, triggered=self.run_rbf_morpher)
+        self.findLandmarks = QAction(QIcon("open.png"), 'Find Landmakrs',
+                                     self, tirggered=self.find_landmarks)
 
 
     def createMenus(self):
@@ -110,15 +88,10 @@ class MeshMorpherGUI(QMainWindow):
         self.fileMenu.addAction(self.saveFile)
         self.fileMenu.addSeparator()
         self.fileMenu.addAction(self.exitAct)
-        self.amberg_nricp_menu = self.menuBar().addMenu("&Amberg")
-        self.amberg_nricp_menu.addAction(self.runAmberg)
-        self.morph_menu = self.menuBar().addMenu("&Morph Options")
-        self.morph_menu.addAction(self.openMorphOptions)
-
-    
-    def open_morph_options(self):
-        print('You have tried to open the morph options menu!')
-
+        self.toolsMenu = self.menuBar().addMenu("&Tools")
+        self.toolsMenu.addAction(self.runAmberg)
+        self.toolsMenu.addAction(self.runRBF)
+        self.toolsMenu.addAction(self.findLandmarks)
 
     def chooseOpenFile(self):
         """
@@ -132,9 +105,7 @@ class MeshMorpherGUI(QMainWindow):
 
         if fname[0] == '':
             return
-        self.cdb_file = fname[0]
-        self.read_cdb()
-    
+        file_name = fname[0]
 
     def chooseSaveFile(self):
         fname = QFileDialog.getSaveFileName(self,
@@ -144,11 +115,7 @@ class MeshMorpherGUI(QMainWindow):
 
         if fname[0] == '':
             return
-        self.inp_file = fname[0]
-        #try:
-        self.write_inp()
-        #except AttributeError:
-        #    print('A point has not been selected')
+        file_name = fname[0]
 
     def choose_WDIR(self):
         _dir = QFileDialog.getExistingDirectory(self,
@@ -205,13 +172,20 @@ class MeshMorpherGUI(QMainWindow):
         self.filesDrop.append(file_name)
 
     def run_amberg_mapping(self):
-        self.amberg_nricp = ambergOptions(self)
+        self.amberg_nricp = Amberg_Mapping(self)
         self.amberg_nricp.show()
 
 
-class ambergOptions(QMainWindow):
+    def run_rbf_morpher(self):
+        self.rbf_morpher = RBF_Morpher(self)
+        self.rbf_morpher.show()
+
+    def find_landmarks(self):
+        pass
+
+class Amberg_Mapping(QMainWindow):
     def __init__(self, parent = None):
-        super(ambergOptions, self).__init__(parent)
+        super(Amberg_Mapping, self).__init__(parent)
         self.setWindowTitle("Amberg Mapping")
         self.mainWidget = QWidget()
         self.setCentralWidget(self.mainWidget)
@@ -254,7 +228,7 @@ class ambergOptions(QMainWindow):
         self.epsilon_text = QLabel("Epsilon")
         self.options_layout.addWidget(self.epsilon_text, 1, 0)
         self.epsilon_edit = QLineEdit()
-        self.epsilon_edit.setInputMask("9")
+        self.epsilon_edit.setInputMask("9") # TODO: Adjust input masks
         self.epsilon_edit.setPlaceholderText("0.001")
         self.options_layout.addWidget(self.epsilon_edit, 1, 1)
         self.gamma_text = QLabel("Gamma")
@@ -297,9 +271,6 @@ class ambergOptions(QMainWindow):
 
         self.resize(520,400)
 
-        # TODO: Add signals and controls for all of the above
-        # TODO: Add mesh selection combobox
-
     def set_step_table_defaults(self) -> None:
         step_defaults = [
             [0.01, 0, 0.5, 10],
@@ -315,7 +286,6 @@ class ambergOptions(QMainWindow):
 
     def set_step_table_sizing(self):
         self.table.resizeColumnsToContents()
-        rows = self.table.rowCount()
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -335,18 +305,13 @@ class ambergOptions(QMainWindow):
         if self.table.currentRow():
             self.table.removeRow(self.table.currentRow())
         else:
-            self.pop_up_info_dialog("Please select a row to be deleted first!")
-
-    def pop_up_info_dialog(self, message):
-        dialog = QMessageBox()
-        dialog.setText(message)
-        dialog.exec()
+            show_message(message="Please select a row to be deleted first!",
+                         title="Delete Loop Error")
     
     def initiate_amberg(self):
-        # TODO: Run checks to see if there are two different meshes selected for the morphing.
-        # TODO: Get information from all the options
         if self.source.count() < 2:
-            self.pop_up_info_dialog("You need at least two meshes to perform an Amberg Mapping!")
+            show_message(message="You need at least two meshes to perform an Amberg Mapping!",
+                         title="Mesh Error")
             # For testing perposes add 
             self.target.setCurrentIndex(1)
             #return # TODO: Make this a return and delete above test file imports
@@ -381,10 +346,57 @@ class ambergOptions(QMainWindow):
         output_mesh = AM.mapped
         self.parent.files[output_mesh.f_name] = output_mesh
         self.parent.file_manager.addRow(output_mesh.f_name, output_mesh)
-        self.filesDrop.append(output_mesh.f_name)
-        self.exec()
+        self.parent.filesDrop.append(output_mesh.f_name)
+        self.close()
 
+class RBF_Morpher(QMainWindow):
+    def __init__(self, parent = None):
+        super(RBF_Morpher, self).__init__(parent)
+        self.setWindowTitle("RBF Morphing")
+        self.mainWidget = QWidget()
+        self.setCentralWidget(self.mainWidget)
+        self.parent = parent
 
+        self.main_layout = QVBoxLayout()
+
+        # Selected file that has is unmapped
+        self.unmapped_text = QLabel("Unmapped Mesh")
+        self.main_layout.addWidget(self.unmapped_text)
+        self.unmapped = QComboBox()
+        self.unmapped.addItems(self.parent.files)
+        self.setStyleSheet("QComboBox {text-align: center;}")
+        self.main_layout.addWidget(self.unmapped)
+        # Selected file that has been mapped to surfaces
+        self.mapped_text = QLabel("Mapped Mesh")
+        self.main_layout.addWidget(self.mapped_text)
+        self.mapped = QComboBox()
+        self.mapped.addItems(self.parent.files)
+        self.main_layout.addWidget(self.mapped)
+        self.mapped.setCurrentIndex(1)
+        # Selected file to be morphed
+        self.morphee_text = QLabel("Morph This")
+        self.main_layout.addWidget(self.morphee_text)
+        self.morphee = QComboBox()
+        self.morphee.addItems(self.parent.files)
+        self.main_layout.addWidget(self.morphee)
+        self.morphee.setCurrentIndex(2)
+        
+
+        self.run_morph_btn = QPushButton("Run Amberg Mapping")
+        self.run_morph_btn.clicked.connect(self.initiate_morph)
+        self.main_layout.addWidget(self.run_morph_btn)
+
+        self.mainWidget.setLayout(self.main_layout)
+
+        self.resize(520,400)
+
+    def initiate_morph(self):
+        unmapped = self.files[self.unmapped.currentText()]
+        mapped = self.files[self.mapped.currentText()]
+        mrophee = self.files[self.morphee.currentText()]
+
+        #morpher = RBF_morpher.RBFMorpher()
+        print('Inititiated Morphing')
 
 
 class fileManager(QWidget):
@@ -470,7 +482,7 @@ def show_message(message, message_type="err", title="An Error Occured..."):
     dialog.setStandardButtons(QMessageBox.Ok)
 
     # Makes sure doesn't close until user closes it
-    dialog.exec_()
+    dialog.exec()
 
     return dialog
 

@@ -33,7 +33,6 @@ class AmbergMapping:
             'use_faces':self.use_faces,
             'use_landmarks':self.use_landmarks,
         }
-        print(options)
         if options:
             for item in ops:
                 if item in options: ops[item] = options[item]

@@ -18,7 +18,7 @@ os.chdir(WDIR)
 sys.path.append(os.path.join(WDIR, 'Code'))
 
 import MeshObj
-from RBFMorph import RBFMorpher
+import RBF_morpher
 
 FOLDER = 'Liner Model'
 LINER_RIM_Y = 200.0
