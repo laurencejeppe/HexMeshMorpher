@@ -15,7 +15,7 @@ FOLDER = 'Geometry'
 
 class Mesh():
     """Class for containing all the information common between meshes"""
-    def __init__(self, name: str, f_name: str, f_type: str, f_folder: str, description: str=None) -> None:
+    def __init__(self, name: str, f_name: str, f_type: str, f_folder: str, description: str='') -> None:
         self.name = name
         self.f_name = f_name
         self.description = description
@@ -313,7 +313,7 @@ class LinerINPMesh(Mesh):
         self.stl_path = self.path(file_type='stl')
 
         # Liner dimensions
-        self.dimensions = self.get_liner_dimensions()
+        # self.dimensions = self.get_liner_dimensions()
 
         # NPY
         self.elements = None
@@ -328,7 +328,7 @@ class LinerINPMesh(Mesh):
         self.rim_nodes = []
         self.num_rim_nodes = None
         # TODO: Refactor this to not have WDIR here in this form
-        self.rim_nodes_path = os.path.join()#WDIR, self.f_folder, 'RimNodes.npy')
+        #self.rim_nodes_path = os.path.join()#WDIR, self.f_folder, 'RimNodes.npy')
 
         self.read_inp()
 

@@ -46,11 +46,11 @@ class MeshMorpherGUI(QMainWindow):
         self.file_manager = fileManager()
         self.layout.addWidget(self.file_manager)
 
-        self.open_cdb_btn = QPushButton("Open QUAD Mesh")
+        self.open_cdb_btn = QPushButton("Open TRI Mesh")
 
         self.layout.addWidget(self.open_cdb_btn)
 
-        self.open_cdb_btn.clicked.connect(self.load_quad_mesh)
+        self.open_cdb_btn.clicked.connect(self.load_tri_mesh)
 
         self.mainWidget.setLayout(self.layout)
         self.resize(600,600)
@@ -60,8 +60,10 @@ class MeshMorpherGUI(QMainWindow):
         self.openFile = QAction(QIcon('open.png'), 'Open', self,
                                 shortcut='Ctrl+O',
                                 triggered=self.chooseOpenFile)
-        self.openQUADmesh = QAction(QIcon('open.png'), 'Open QUAD', self,
-                                    triggered=self.load_quad_mesh)
+        self.openTRImesh = QAction(QIcon('open.png'), 'Open TRI', self,
+                                    triggered=self.load_tri_mesh)
+        self.openINPmesh = QAction(QIcon("open.png"), 'Open INP', self,
+                                   triggered=self.load_inp_mesh)
         self.choose_wdir = QAction(QIcon('open.png'), 'Choose Working Directory',
                                   self, triggered=self.choose_WDIR)
         self.saveFile = QAction(QIcon('open.png'), 'Save', self,
@@ -74,7 +76,7 @@ class MeshMorpherGUI(QMainWindow):
         self.runRBF = QAction(QIcon("open.png"), 'Run RBF Morpher',
                               self, triggered=self.run_rbf_morpher)
         self.findLandmarks = QAction(QIcon("open.png"), 'Find Landmakrs',
-                                     self, tirggered=self.find_landmarks)
+                                     self, triggered=self.find_landmarks)
 
 
     def createMenus(self):
@@ -83,7 +85,8 @@ class MeshMorpherGUI(QMainWindow):
         """
         self.fileMenu = self.menuBar().addMenu("&File")
         self.fileMenu.addAction(self.openFile)
-        self.fileMenu.addAction(self.openQUADmesh)
+        self.fileMenu.addAction(self.openTRImesh)
+        self.fileMenu.addAction(self.openINPmesh)
         self.fileMenu.addAction(self.choose_wdir)
         self.fileMenu.addAction(self.saveFile)
         self.fileMenu.addSeparator()
@@ -93,19 +96,16 @@ class MeshMorpherGUI(QMainWindow):
         self.toolsMenu.addAction(self.runRBF)
         self.toolsMenu.addAction(self.findLandmarks)
 
-    def chooseOpenFile(self):
-        """
-        Handles importing and reading of cdb
-
-        """
+    def chooseOpenFile(self, type_filter: str, prompt:str='Open File'):
+        """ Handles importing and reading of new files """
         fname = QFileDialog.getOpenFileName(self,
-                                            'Open file',
+                                            prompt,
                                             directory=self.WDIR,
-                                            filter="ANSYS (*.cdb)")
+                                            filter=type_filter)
 
         if fname[0] == '':
-            return
-        file_name = fname[0]
+            return None
+        return fname[0]
 
     def chooseSaveFile(self):
         fname = QFileDialog.getSaveFileName(self,
@@ -114,6 +114,7 @@ class MeshMorpherGUI(QMainWindow):
                                             filter="ABAQUS (*.inp)")
 
         if fname[0] == '':
+            show_message("Error loading mesh!")
             return
         file_name = fname[0]
 
@@ -132,23 +133,19 @@ class MeshMorpherGUI(QMainWindow):
         self.filesDrop.append(file_name)
 
 
-    def load_quad_mesh(self):
+    def load_tri_mesh(self):
         """
-        This is used to load a quad mesh created as either an stl or inp.
+        This is used to load a tri mesh created as either an stl or inp.
         If an inp is selected it will save it as an stl and load the stl.
         The loaded stl is then returned in a MeshObj STLMesh Object.
         If from_inp: the inp mesh is loaded converted to an stl file, saved
         and loaded.
         else: the stl file is loaded.
         """
-        fname = QFileDialog.getOpenFileName(self,
-                                            'Open file',
-                                            directory=self.WDIR,
-                                            filter="ABAQUS (*.inp), MESH (*.stl)")
-
-        if fname[0] == '':
+        fname = self.chooseOpenFile("ABAQUS (*.inp), MESH (*.stl)")
+        if not fname:
             return
-        file_path = fname[0]
+        file_path = fname
         file_folder_list = file_path[:-4].split('/')[:-1]
         file_folder_list[0] = file_folder_list[0] + '/'
         file_folder = os.path.join(*file_folder_list)
@@ -170,6 +167,30 @@ class MeshMorpherGUI(QMainWindow):
         mesh_obj = self.files[file_name]
         self.file_manager.addRow(file_name, mesh_obj)
         self.filesDrop.append(file_name)
+
+    def load_inp_mesh(self):
+        fname = self.chooseOpenFile("ABAQUS (*.inp)")
+        if not fname:
+            return
+        file_path = fname
+        file_folder_list = file_path[:-4].split('/')[:-1]
+        file_folder_list[0] = file_folder_list[0] + '/'
+        file_folder = os.path.join(*file_folder_list)
+        file_name = file_path[:-4].split('/')[-1]
+
+        if file_path[-4:] == '.inp':
+            # Load liner surface inp file
+            inp = MeshObj.LinerINPMesh(file_name, file_name, file_folder)
+            inp.rename(file_name, self.WDIR)
+            file_folder = self.WDIR
+        else:
+            return
+        
+        # Load surface stl file
+        self.files[file_name] = inp
+        self.file_manager.addRow(file_name, inp)
+        self.filesDrop.append(file_name)
+
 
     def run_amberg_mapping(self):
         self.amberg_nricp = Amberg_Mapping(self)
@@ -197,7 +218,10 @@ class Amberg_Mapping(QMainWindow):
         self.layout = QGridLayout()
         self.table = QTableWidget()
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(['Stiffness', 'Landmarks', 'Rigid Transformation', 'Iterations'])
+        self.table.setHorizontalHeaderLabels(['Stiffness',
+                                              'Landmarks',
+                                              'Rigid Transformation',
+                                              'Iterations'])
         #self.table.setCurrentCell(1,3)
         self.set_step_table_defaults()
         self.table.horizontalHeader().setCascadingSectionResizes(True)
@@ -372,14 +396,12 @@ class RBF_Morpher(QMainWindow):
         self.mapped = QComboBox()
         self.mapped.addItems(self.parent.files)
         self.main_layout.addWidget(self.mapped)
-        self.mapped.setCurrentIndex(1)
         # Selected file to be morphed
         self.morphee_text = QLabel("Morph This")
         self.main_layout.addWidget(self.morphee_text)
         self.morphee = QComboBox()
         self.morphee.addItems(self.parent.files)
         self.main_layout.addWidget(self.morphee)
-        self.morphee.setCurrentIndex(2)
         
 
         self.run_morph_btn = QPushButton("Run Amberg Mapping")
@@ -391,12 +413,25 @@ class RBF_Morpher(QMainWindow):
         self.resize(520,400)
 
     def initiate_morph(self):
+        if self.source.count() < 3:
+            show_message(message="You need at least two meshes to perform an Amberg Mapping!",
+                         title="Mesh Error")
+            # For testing perposes add
+            self.unmapped.setCurrentIndex(0)
+            self.mapped.setCurrentIndex(1)
+            self.morphee.setCurrentIndex(2)
+            # return # TODO: Make this a return and delete above test file imports
         unmapped = self.files[self.unmapped.currentText()]
         mapped = self.files[self.mapped.currentText()]
-        mrophee = self.files[self.morphee.currentText()]
+        morphee = self.files[self.morphee.currentText()]
 
-        #morpher = RBF_morpher.RBFMorpher()
-        print('Inititiated Morphing')
+        morpher = RBF_morpher.RBFMorpher(unmapped, mapped, RBF_Morpher.custom_RBF)
+
+        # Morph the liner nodes and replace them in the liner mesh objected
+        morphee.nodes[:,1:] = morpher.morph_vertices(morphee.nodes[:,1:])
+        name = morphee.f_name + "_mrophed.inp"
+        morphee.write_inp(name)
+        self.close()
 
 
 class fileManager(QWidget):
@@ -410,7 +445,6 @@ class fileManager(QWidget):
     >>> from GUIs.ampscanGUI import ampscanGUI
 
     """
-
     def __init__(self, parent = None):
         super(fileManager, self).__init__(parent)
         self.table = QTableWidget()
@@ -418,8 +452,8 @@ class fileManager(QWidget):
         self.layout.addWidget(self.table, 0, 0)
         self.setLayout(self.layout)
         self.table.setRowCount(0)
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(['Name', 'Type', 'Colour', 'Opacity', 'Display'])
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(['Name', 'Type', 'Description', 'Display'])
         self.n = self.table.rowCount()
         # Set the minimum table size to when it is fully expanded
         self.table.setMinimumWidth(self.table.frameWidth()*2
@@ -430,8 +464,7 @@ class fileManager(QWidget):
         self.table.insertRow(self.n)
         self.table.setItem(self.n, 0, QTableWidgetItem(name))
         self.table.setItem(self.n, 1, QTableWidgetItem(amp.f_type))
-        self.table.setItem(self.n, 2, QTableWidgetItem(str(amp.color)))
-        self.table.setItem(self.n, 3, QTableWidgetItem(str(amp.opacity)))
+        self.table.setItem(self.n, 2, QTableWidgetItem(amp.description))
         chkBoxItem = QTableWidgetItem()
         chkBoxItem.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         chkBoxItem.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
