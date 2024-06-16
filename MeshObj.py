@@ -22,8 +22,11 @@ class Mesh():
         self.f_type = f_type
         self.f_folder = f_folder
         self.f_path = self.path()
-        self.color = [1,1,1]
-        self.opacity = 1.0
+        self.num_nodes:int = None
+        self.num_elements:int = None
+        self.num_boundary_nodes:int = None
+        self.boundary_nodes = None
+        self.units:str = None
 
     def path(self, file_name: str=None, file_type: str=None):
         """Generates the path of the mesh object depending on the f_name and f_type"""
@@ -37,11 +40,8 @@ class Mesh():
         self.f_folder = file_folder if file_folder else self.f_folder
         self.f_path = self.path()
 
-    def setColor(self, color):
-        self.color = color
-
-    def setOpacity(self, opacity):
-        self.opasity = opacity
+    def set_units(self, units: str):
+        self.units = units
 
 def rot_x(ang):
     """Returns transformation matrix for rotations of ang (deg) about the x axis"""
@@ -94,7 +94,14 @@ class STLMesh(Mesh):
     def load_stl(self) -> None:
         """Loads STL file as trimesh object."""
         self.trimesh = tr.load_mesh(self.path())
-        self.values = np.zeros([len(self.trimesh.vertices)])
+        self.num_nodes = len(self.trimesh.vertices)
+        self.num_elements = len(self.trimesh.faces)
+        x1 = np.max(self.trimesh.vertices[:][0])
+        x2 = np.min(self.trimesh.vertices[:][0])
+        if abs(x1 - x2) > 1:
+            self.units = "mm"
+        else:
+            self.units = "m"
 
     def save_trimesh_as_stl(self, name=None) -> None:
         """Saves trimesh object as an STL."""
@@ -180,20 +187,23 @@ class STLMesh(Mesh):
                 f"\n\tMesh contains {1-self.trimesh.euler_number} holes."
         unique_edges = self.trimesh.edges[tr.grouping.group_rows(self.trimesh.edges_sorted, require_count=1)]
 
-        rim_nodes = {}
-        rim_nodes['indices'] = np.unique(unique_edges.flatten())
-        rim_nodes['coords'] = self.trimesh.vertices[np.unique(unique_edges.flatten())]
+        boundary_nodes = {}
+        boundary_nodes['indices'] = np.unique(unique_edges.flatten())
+        boundary_nodes['coords'] = self.trimesh.vertices[np.unique(unique_edges.flatten())]
 
-        return rim_nodes
+        self.num_boundary_nodes = len(boundary_nodes)
+
+        return boundary_nodes
     
-    def order_rim_nodes(self) -> dict:
+    def order_boundary_nodes(self) -> dict:
         """
         Makes sure all the points in a polygon are consecutive around the polygon.
         """
-        rim_nodes = self.get_boundary_nodes()
+        if not self.boundary_nodes:
+            self.boundary_nodes = self.get_boundary_nodes()
 
-        coords = rim_nodes['coords']
-        indices = rim_nodes['indices']
+        coords = self.boundary_nodes['coords']
+        indices = self.boundary_nodes['indices']
         # Creates new coords with same shape as the coords of node positions
         new_coords = np.zeros(shape=np.shape(coords))
         new_indices = np.zeros(shape=np.shape(indices))
@@ -236,18 +246,18 @@ class STLMesh(Mesh):
             coords = np.delete(coords, index, 0)
             indices = np.delete(indices, index, 0)
             i += 1
-        new_rim_nodes = {}
-        new_rim_nodes['indices'] = new_indices
-        new_rim_nodes['coords'] = new_coords
+        new_boundary_nodes = {}
+        new_boundary_nodes['indices'] = new_indices
+        new_boundary_nodes['coords'] = new_coords
         #new_coords = np.delete(new_coords, 0, 0) # Not sure why we did this.
-        return new_rim_nodes
+        return new_boundary_nodes
     
-    def resample_rim_nodes(self, num_nodes):
+    def resample_boundary_nodes(self, num_nodes):
         """
         Interpolates the points around a polygon.
         """
-        rim_nodes = self.order_rim_nodes()
-        array = rim_nodes['coords']
+        boundary_nodes = self.order_boundary_nodes()
+        array = boundary_nodes['coords']
 
         # Cumulative Euclidean distance between successive polygon points.
         # This will be the "x" for interpolation
@@ -262,47 +272,16 @@ class STLMesh(Mesh):
             np.interp(d_sampled, d, array[:, 1]),
             np.interp(d_sampled, d, array[:, 2]),
         ]
-        rim_nodes['coords'] = interp
-        return rim_nodes
+        boundary_nodes['coords'] = interp
+        return boundary_nodes
     
-    def getVert(self):
-        r"""
-        Function to return the vert array
-        """
-        return self.trimesh.vertices
-
-    def setVert(self, vert):
-        r"""
-        Function to set the vert array
-        """
-        self.trimesh.vertices = vert
-
-    def getFaces(self):
-        r"""
-        Function to return the faces array
-        """
-        return self.trimesh.faces
-
-    def setFaces(self, faces):
-        r"""
-        Function to set the faces array
-        """
-        self.tirmesh.faces = faces
-
-    def getValues(self):
-        r"""
-        Function to return the values array
-        """
-        return self.values
-
-    def setValues(self, values):
-        r"""
-        Function to set the values array
-        """
-        self.values = values
+    def change_units(self, factor, units):
+        self.trimesh.apply_scale(factor)
+        self.units = units
 
 
-class LinerINPMesh(Mesh):
+
+class INPMesh(Mesh):
     """
     Class for reading, getting and editing the array of nodes and then
     saving the editted inp file with those edits.
@@ -325,10 +304,9 @@ class LinerINPMesh(Mesh):
         self.elem_head = []       # Heading for the elements i.e. type
         self._inp_tail = []        # Tail for the inp file
 
-        self.rim_nodes = []
-        self.num_rim_nodes = None
-        # TODO: Refactor this to not have WDIR here in this form
-        #self.rim_nodes_path = os.path.join()#WDIR, self.f_folder, 'RimNodes.npy')
+        self.boundary_nodes = []
+        self.num_boundary_nodes = None
+        self.boundary_nodes_path = None
 
         self.read_inp()
 
@@ -337,17 +315,20 @@ class LinerINPMesh(Mesh):
         data_list = []
         with open(self.f_path, 'r', encoding="utf-8") as file:
             data_list = file.readlines()
-        [indexes, instances] = self.find_index(data_list, '*Part,')
-        assert len(indexes) == 1, f'Can only process inp files with one part, {len(indexes)} were given.'
+        try:
+            [indexes, instances] = self.find_index(data_list, '*Part,')
+            assert len(indexes) == 1, f'Can only process inp files with one part, {len(indexes)} were given.'
+            part_index = indexes[0]
+            self.part_head = instances[0].strip()
+            self.part_name = instances[0].split('=')[-1].strip()
+        except:
+            print("No *PART found, contining without parts")
 
-        part_index = indexes[0]
         [n_indexes, n_insts] = self.find_index(data_list, '*Node')
         assert len(n_indexes) == 1, f'Can only process inp files with one node section, {len(n_indexes)} are given.'
         node_index = n_indexes[0]
 
         self._inp_head = data_list[:node_index]
-        self.part_head = instances[0].strip()
-        self.part_name = instances[0].split('=')[-1].strip()
 
         [e_indexes, e_insts] = self.find_index(data_list, '*Element')
 
@@ -360,31 +341,41 @@ class LinerINPMesh(Mesh):
         self.nodes \
             = np.array([[float(item.strip()) for item in line.split(',')] for line in node_list])
 
-        elem_end = self.find_num_elements(elem_index + 1, data_list)
-
-        elem_list = data_list[elem_index + 1: elem_end]
+        [elem_list, elem_end] = self.find_elements(elem_index + 1, data_list)
 
         self.elements \
             = np.array([[int(item.strip()) for item in line.split(',')] for line in elem_list])
+        
+        if len(data_list) == elem_end:
+            self._inp_tail = ""
+        else:
+            self._inp_tail = data_list[elem_end:]
 
-        self._inp_tail = data_list[elem_end:]
+        x1 = np.max(self.nodes[:,0])
+        x2 = np.min(self.nodes[:,0])
+        if abs(x1 - x2) > 1:
+            self.units = "mm"
+        else:
+            self.units = "m"
 
-    def change_units(self, factor):
+    def change_units(self, factor, units):
         for i, node in enumerate(self.nodes):
             self.nodes[i][1:] = node[1:]*factor
+        self.units = units
 
-    def find_num_elements(self, starting_index, data_list):
+    def find_elements(self, starting_index, data_list):
         """Finds the number of elements in the inp file."""
         index = starting_index
-        while self._try(data_list[index].split(',')[0]):
+        elements = []
+        more_elements = True
+        while more_elements:
+            elements.append(data_list[index])
             index += 1
-        return index
-
-    def _try(self, item):
-        try:
-            return int(item)
-        except:
-            return False
+            try:
+                int(data_list[index].split(',')[0])
+            except:
+                return elements, index-1
+        return elements, index-1
 
     def find_index(self, data_list, keyword_input):
         """Finds the index if a keyword in a file list"""
@@ -396,8 +387,7 @@ class LinerINPMesh(Mesh):
                 index.append(data_list.index(instance))
             return [index, instances]
         else:
-            print('No ' + keyword_input + ' found, check the output file for completeness!')
-            return
+            raise ParsingError(keyword_input, "Check that the input file is correctly written.")
 
     def write_inp(self, file_name: str):
         """Write the changed inp file."""
@@ -462,9 +452,9 @@ class LinerINPMesh(Mesh):
             dimensions[line.split('=')[0].strip()] = float(line.split('=')[1].strip().split()[0])
         return dimensions
 
-    def get_rim_nodes(self) -> None:
+    def get_boundary_nodes(self) -> None:
         """Gets the indices and coordinates of the liner rim nodes and the
-        number of them saving them in self.rim_nodes and self.num_rim_nodes."""
+        number of them saving them in self.boundary_nodes and self.num_boundary_nodes."""
         # Y value of the rim of the liner
         liner_rim = self.dimensions['Length'] - (self.dimensions['Diameter']/2)
 
@@ -472,20 +462,20 @@ class LinerINPMesh(Mesh):
         indices = np.transpose(np.argwhere(self.nodes[:,2] == float(liner_rim)))[0]
 
         # Use the index to get all the nodes with a y value of liner_rim
-        self.rim_nodes = self.nodes[indices]
+        self.boundary_nodes = self.nodes[indices]
 
         # Get the number of rim nodes
-        self.num_rim_nodes = len(indices)
+        self.num_boundary_nodes = len(indices)
 
     def apply_transformation(self, transformation_matrix):
         for i, node in enumerate(self.nodes):
             self.nodes[i][1:] = np.dot(transformation_matrix,np.append(node[1:],1))[:3]
 
-    def save_rim_nodes(self, file_name: str) -> None:
+    def save_boundary_nodes(self, file_name: str) -> None:
         """Saves the indices and coordinates of the rim nodes in an npy file."""
-        # TODO: Refactor this to not include WDIR here
-        file_path = os.path.join()#WDIR, self.f_folder, file_name)
-        np.save(file_path, self.rim_nodes)
+        file_path = os.path.join(self.f_path, self.f_folder, file_name)
+        self.boundary_nodes_path = file_path
+        np.save(file_path, self.boundary_nodes)
 
 def cut_meshes(meshes: list[STLMesh],
                offset:float=0.210,
@@ -503,6 +493,14 @@ def cut_meshes(meshes: list[STLMesh],
                       custom_axis=norm_vect)
         meshes[i] = STLMesh('CutMesh', f'{mesh.f_name}_cut', mesh.f_folder)
     return meshes
+
+class ParsingError(Exception):
+    def __init__(self, keyword, message=None):
+        self.message = f"File parsing has failed keyword not found.\n\n{keyword} was not found in the file.\n"
+        if message:
+            self.message += f"\n{message}\n"
+        super().__init__(self.message)
+
 
 if __name__ == "__main__":
     pass

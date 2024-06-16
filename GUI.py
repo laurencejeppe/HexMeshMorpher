@@ -41,16 +41,24 @@ class MeshMorpherGUI(QMainWindow):
         self.createActions()
         self.createMenus()
 
-        self.layout = QVBoxLayout()
+        self.layout = QHBoxLayout()
 
         self.file_manager = fileManager()
         self.layout.addWidget(self.file_manager)
 
-        self.open_cdb_btn = QPushButton("Open TRI Mesh")
-
-        self.layout.addWidget(self.open_cdb_btn)
-
-        self.open_cdb_btn.clicked.connect(self.load_tri_mesh)
+        self.options_layout = QVBoxLayout()
+        self.open_tri_btn = QPushButton("Open TRI Mesh")
+        self.open_tri_btn.clicked.connect(self.load_tri_mesh)
+        self.options_layout.addWidget(self.open_tri_btn)
+        self.open_inp_btn = QPushButton("Open INP Mesh")
+        self.open_inp_btn.clicked.connect(self.load_inp_mesh)
+        self.options_layout.addWidget(self.open_inp_btn)
+        self.change_mesh_units_btn = QPushButton("Change Selected Mesh Units")
+        self.change_mesh_units_btn.clicked.connect(self.change_mesh_units)
+        self.options_layout.addWidget(self.change_mesh_units_btn)
+        
+        self.options_layout.addStretch()
+        self.layout.addLayout(self.options_layout)
 
         self.mainWidget.setLayout(self.layout)
         self.resize(600,600)
@@ -153,13 +161,14 @@ class MeshMorpherGUI(QMainWindow):
 
         if file_path[-4:] == '.inp':
             # Load liner surface inp file
-            liner_surface_inp = MeshObj.LinerINPMesh(file_name, file_name,
+            liner_surface_inp = MeshObj.INPMesh(file_name, file_name,
                                                      file_folder)
             liner_surface_inp.rename(file_name, self.WDIR)
             liner_surface_inp.write_stl()   # Save as stl
             file_folder = self.WDIR
         elif file_path[-4:] != '.stl':
             return
+        
         
         # Load surface stl file
         self.files[file_name] = MeshObj.STLMesh(file_name, file_name,
@@ -180,7 +189,7 @@ class MeshMorpherGUI(QMainWindow):
 
         if file_path[-4:] == '.inp':
             # Load liner surface inp file
-            inp = MeshObj.LinerINPMesh(file_name, file_name, file_folder)
+            inp = MeshObj.INPMesh(file_name, file_name, file_folder)
             inp.rename(file_name, self.WDIR)
             file_folder = self.WDIR
         else:
@@ -191,6 +200,24 @@ class MeshMorpherGUI(QMainWindow):
         self.file_manager.addRow(file_name, inp)
         self.filesDrop.append(file_name)
 
+    def change_mesh_units(self):
+        if not self.file_manager.table.selectedItems():
+            show_message(message="Please select a mesh in the table to change the units first!",
+                         title="Item Selection Error")
+        rows = []
+        for item in self.file_manager.table.selectedItems():
+            rows.append(self.file_manager.table.row(item))
+        rows = set(rows)
+        for row in rows:
+            row = self.file_manager.table.currentRow()
+            item = self.file_manager.table.item(row, 0).text()
+            units = self.file_manager.table.item(row, 3).text()
+            units = "mm" if units == "m" else "m"
+            factor = 1000 if units == "m" else 0.001
+            self.files[item].change_units(factor, units)
+            self.file_manager.table.item(row, 3).setText(units)
+        
+        
 
     def run_amberg_mapping(self):
         self.amberg_nricp = Amberg_Mapping(self)
@@ -453,7 +480,7 @@ class fileManager(QWidget):
         self.setLayout(self.layout)
         self.table.setRowCount(0)
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(['Name', 'Type', 'Description', 'Display'])
+        self.table.setHorizontalHeaderLabels(['Name', 'Type', 'Description', 'Units'])
         self.n = self.table.rowCount()
         # Set the minimum table size to when it is fully expanded
         self.table.setMinimumWidth(self.table.frameWidth()*2
@@ -465,12 +492,8 @@ class fileManager(QWidget):
         self.table.setItem(self.n, 0, QTableWidgetItem(name))
         self.table.setItem(self.n, 1, QTableWidgetItem(amp.f_type))
         self.table.setItem(self.n, 2, QTableWidgetItem(amp.description))
-        chkBoxItem = QTableWidgetItem()
-        chkBoxItem.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-        chkBoxItem.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
-        chkBoxItem.setCheckState(Qt.CheckState.Checked)
-
-        self.table.setItem(self.n,4,chkBoxItem)
+        self.table.setItem(self.n, 3, QTableWidgetItem(amp.units))
+        
         self.n = self.table.rowCount()
 
     def getRow(self, i):
@@ -479,13 +502,6 @@ class fileManager(QWidget):
             row.append(self.table.item(i, r).text())
         row.append(self.table.item(i, r+1).checkState())
         return row
-
-    def setTable(self, name, color = [1.0, 1.0, 1.0], opacity=1.0, display=2):
-        for i in range(self.n):
-            if self.table.item(i, 0).text() == name:
-                self.table.item(i, 2).setText(str(color))
-                self.table.item(i, 3).setText(str(opacity))
-                self.table.item(i, 4).setCheckState(display)
 
 def show_message(message, message_type="err", title="An Error Occured..."):
     """
@@ -508,11 +524,11 @@ def show_message(message, message_type="err", title="An Error Occured..."):
     dialog.setText(message)
     dialog.setWindowTitle(title)
     icons = {
-        "err": QMessageBox.Critical,
-        "info": QMessageBox.Information
+        "err": QMessageBox.Icon.Critical,
+        "info": QMessageBox.Icon.Information
     }
     dialog.setIcon(icons[message_type])
-    dialog.setStandardButtons(QMessageBox.Ok)
+    dialog.setStandardButtons(QMessageBox.StandardButton.Ok)
 
     # Makes sure doesn't close until user closes it
     dialog.exec()
