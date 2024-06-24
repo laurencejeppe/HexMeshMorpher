@@ -13,7 +13,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QVBoxLayout, QComboBox, QPushButton, QHBoxLayout,
                              QCheckBox, QTableWidget, QTableWidgetItem,
                              QGridLayout, QMessageBox, QLineEdit, QLabel,
-                             QHeaderView)
+                             QHeaderView, QDoubleSpinBox, QSpinBox,
+                             QAbstractSpinBox)
 import MeshObj
 import amberg_mapping
 import RBF_morpher
@@ -281,27 +282,30 @@ class Amberg_Mapping(QMainWindow):
         self.options_layout.addWidget(self.use_landmarks, 0, 1)
         self.epsilon_text = QLabel("Epsilon")
         self.options_layout.addWidget(self.epsilon_text, 1, 0)
-        self.epsilon_edit = QLineEdit()
-        self.epsilon_edit.setInputMask("9") # TODO: Adjust input masks
-        self.epsilon_edit.setPlaceholderText("0.001")
+        self.epsilon_edit = QDoubleSpinBox()
+        self.epsilon_edit.setDecimals(5)
+        self.epsilon_edit.setRange(0.00001, 0.1)
+        self.epsilon_edit.setValue(0.001)
+        self.epsilon_edit.setStepType(QAbstractSpinBox.StepType.AdaptiveDecimalStepType)
         self.options_layout.addWidget(self.epsilon_edit, 1, 1)
         self.gamma_text = QLabel("Gamma")
         self.options_layout.addWidget(self.gamma_text, 2, 0)
-        self.gamma_edit = QLineEdit()
-        self.gamma_edit.setInputMask("9")
-        self.gamma_edit.setPlaceholderText("1")
+        self.gamma_edit = QSpinBox()
+        self.gamma_edit.setRange(1, 100)
+        self.gamma_edit.setValue(1)
         self.options_layout.addWidget(self.gamma_edit, 2, 1)
         self.neighbors_text = QLabel("Neighbors")
         self.options_layout.addWidget(self.neighbors_text, 3, 0)
-        self.neighbors_edit = QLineEdit()
-        self.neighbors_edit.setInputMask("9")
-        self.neighbors_edit.setPlaceholderText("8")
+        self.neighbors_edit = QSpinBox()
+        self.neighbors_edit.setRange(1, 99)
+        self.neighbors_edit.setValue(8)
         self.options_layout.addWidget(self.neighbors_edit, 3, 1)
         self.distance_text = QLabel("Distance Threshold")
         self.options_layout.addWidget(self.distance_text, 4, 0)
-        self.distance_edit = QLineEdit()
-        self.distance_edit.setInputMask("9")
-        self.distance_edit.setPlaceholderText("0.1")
+        self.distance_edit = QDoubleSpinBox()
+        self.distance_edit.setDecimals(2)
+        self.distance_edit.setRange(0.01, 1)
+        self.distance_edit.setValue(0.1)
         self.options_layout.addWidget(self.distance_edit, 4, 1)
         self.source_text = QLabel("Source Mesh")
         self.options_layout.addWidget(self.source_text, 5, 0)
@@ -323,7 +327,7 @@ class Amberg_Mapping(QMainWindow):
 
         self.mainWidget.setLayout(self.layout)
 
-        self.resize(520,400)
+        self.resize(530,450)
 
     def set_step_table_defaults(self) -> None:
         step_defaults = [
@@ -380,7 +384,7 @@ class Amberg_Mapping(QMainWindow):
         for row in range(rows):
             for col in range(4):
                 steps[row][col] = float(self.table.item(row, col).text())
-        e = float(self.epsilon_edit.text()) if self.epsilon_edit.hasAcceptableInput() else 0.001
+        e = float(self.epsilon_edit.value()) if self.epsilon_edit.hasAcceptableInput() else 0.001
         g = float(self.gamma_edit.text()) if self.gamma_edit.hasAcceptableInput() else 1
         n = int(self.neighbors_edit.text()) if self.neighbors_edit.hasAcceptableInput() else 8
         d = float(self.distance_edit.text()) if self.distance_edit.hasAcceptableInput() else 0.1
@@ -493,12 +497,15 @@ class fileManager(QWidget):
         self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(['Name', 'Type', 'Description', 'Units'])
         self.n = self.table.rowCount()
+        #self.table.verticalHeader().hide()
         self.table.resizeColumnsToContents()
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.table.horizontalHeader().setSectionsClickable(False)
+        self.table.setCornerButtonEnabled(False)
         # Set the minimum table size to when it is fully expanded
         #self.table.setMinimumWidth(self.table.frameWidth()*2
         #                           + self.table.horizontalHeader().length()
@@ -509,10 +516,16 @@ class fileManager(QWidget):
 
     def addRow(self, name, amp):
         self.table.insertRow(self.n)
-        self.table.setItem(self.n, 0, QTableWidgetItem(name))
-        self.table.setItem(self.n, 1, QTableWidgetItem(amp.f_type))
-        self.table.setItem(self.n, 2, QTableWidgetItem(amp.description))
-        self.table.setItem(self.n, 3, QTableWidgetItem(amp.units))
+        name_item = QTableWidgetItem(name)
+        self.table.setItem(self.n, 0, name_item)
+        f_type_item = QTableWidgetItem(amp.f_type)
+        f_type_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.table.setItem(self.n, 1, f_type_item)
+        description_item = QTableWidgetItem(amp.description)
+        self.table.setItem(self.n, 2, description_item)
+        units_item = QTableWidgetItem(amp.units)
+        units_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.table.setItem(self.n, 3, units_item)
         
         self.n = self.table.rowCount()
 
