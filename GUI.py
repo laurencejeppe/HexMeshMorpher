@@ -61,7 +61,8 @@ class MeshMorpherGUI(QMainWindow):
         self.layout.addLayout(self.options_layout)
 
         self.mainWidget.setLayout(self.layout)
-        self.resize(600,600)
+        #self.resize(600,600)
+        self.setFixedSize(self.size())
         self.show()
 
     def createActions(self):
@@ -229,7 +230,9 @@ class MeshMorpherGUI(QMainWindow):
         self.rbf_morpher.show()
 
     def find_landmarks(self):
-        pass
+        self.landmark_finder = landmarkFinder(self)
+        self.landmark_finder.show()
+
 
 class Amberg_Mapping(QMainWindow):
     def __init__(self, parent = None):
@@ -460,6 +463,14 @@ class RBF_Morpher(QMainWindow):
         morphee.write_inp(name)
         self.close()
 
+class landmarkFinder(QMainWindow):
+    def __init__(self, parent = None):
+        super(landmarkFinder, self).__init__(parent)
+        self.setWindowTitle("Landmark Finder")
+        self.mainWidget = QWidget()
+        self.setCentralWidget(self.mainWidget)
+        self.parent = parent
+
 
 class fileManager(QWidget):
     """
@@ -482,10 +493,19 @@ class fileManager(QWidget):
         self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(['Name', 'Type', 'Description', 'Units'])
         self.n = self.table.rowCount()
+        self.table.resizeColumnsToContents()
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         # Set the minimum table size to when it is fully expanded
-        self.table.setMinimumWidth(self.table.frameWidth()*2
-                                   + self.table.horizontalHeader().length()
-                                   + self.table.verticalHeader().width())
+        #self.table.setMinimumWidth(self.table.frameWidth()*2
+        #                           + self.table.horizontalHeader().length()
+        #                           + self.table.verticalHeader().width())
+        #self.table.setMaximumWidth(self.table.frameWidth()*2
+        #                           + self.table.horizontalHeader().length()
+        #                           + self.table.verticalHeader().width())
 
     def addRow(self, name, amp):
         self.table.insertRow(self.n)
