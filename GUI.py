@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QCheckBox, QTableWidget, QTableWidgetItem,
                              QGridLayout, QMessageBox, QLineEdit, QLabel,
                              QHeaderView, QDoubleSpinBox, QSpinBox,
-                             QAbstractSpinBox)
+                             QAbstractSpinBox, QStyle, QDialog)
 import MeshObj
 import amberg_mapping
 import RBF_morpher
@@ -49,7 +49,7 @@ class MeshMorpherGUI(QMainWindow):
 
         self.options_layout = QVBoxLayout()
         self.open_tri_btn = QPushButton("Open TRI Mesh")
-        self.open_tri_btn.clicked.connect(self.load_tri_mesh)
+        self.open_tri_btn.clicked.connect(self.load_mesh_dialog)
         self.options_layout.addWidget(self.open_tri_btn)
         self.open_inp_btn = QPushButton("Open INP Mesh")
         self.open_inp_btn.clicked.connect(self.load_inp_mesh)
@@ -142,6 +142,61 @@ class MeshMorpherGUI(QMainWindow):
         self.file_manager.addRow(file_name, mesh_obj)
         self.filesDrop.append(file_name)
 
+    
+    def load_mesh_dialog(self, stl=True, inp=True):
+        stl_string = "MESH (*.stl)"
+        inp_string = "ABAQUS (*.inp)"
+        if not stl:
+            typestring = inp_string
+        elif not inp:
+            typestring = stl_string
+        else:
+            typstring = inp_string + ', ' + stl_string
+        
+        fname = self.chooseOpenFile(typestring)
+        
+        if not fname:
+            show_message("Mesh selection has failed")
+            return
+        
+        file_path = fname
+        file_folder_list = file_path[:-4].split('/')[:-1]
+        file_folder_list[0] = file_folder_list[0] + '/'
+        file_folder = os.path.join(*file_folder_list)
+        file_name = file_path[:-4].split('/')[-1]
+
+        if file_path[-4:] == '.inp':
+            # Load inp mesh
+            mesh = MeshObj.INPMesh(file_name, file_name, file_folder)
+            #inp_mesh.rename(file_name, self.WDIR)
+            #inp_mesh.write_stl()   # Save as stl
+            #file_folder = self.WDIR
+        elif file_path[-4:] == '.stl':
+            mesh = MeshObj.STLMesh(file_name, file_name, file_folder)
+        else:
+            show_message("Mesh selection has failed")
+            return
+
+
+        # TODO: Need to finish off this function which will replace the following two seperate functions
+        # Add options to decide if you want to convert the mesh or change the units or just load it as is
+        d = QDialog()
+        main_layout = QHBoxLayout()
+
+
+
+
+        b1 = QPushButton("")
+        d.setWindowTitle("Load Mesh")
+        d.setWindowModality(Qt.WindowModality.ApplicationModal)
+        d.exec()
+
+        self.files[file_name] = MeshObj.STLMesh(file_name, file_name,
+                                                file_folder)
+        mesh_obj = self.files[file_name]
+        self.file_manager.addRow(file_name, mesh_obj)
+        self.filesDrop.append(file_name)
+
 
     def load_tri_mesh(self):
         """
@@ -219,12 +274,9 @@ class MeshMorpherGUI(QMainWindow):
             self.files[item].change_units(factor, units)
             self.file_manager.table.item(row, 3).setText(units)
         
-        
-
     def run_amberg_mapping(self):
         self.amberg_nricp = Amberg_Mapping(self)
         self.amberg_nricp.show()
-
 
     def run_rbf_morpher(self):
         self.rbf_morpher = RBF_Morpher(self)
@@ -233,6 +285,16 @@ class MeshMorpherGUI(QMainWindow):
     def find_landmarks(self):
         self.landmark_finder = landmarkFinder(self)
         self.landmark_finder.show()
+
+
+class Open_Mesh_Dialog(QDialog):
+    def __init__(self, parent = None):
+        super(Open_Mesh_Dialog, self).__init__(parent)
+        # TODO: Fill this in to have a dialog for loading files
+        # to give options how you load the file and what file you
+        # are loading.
+
+        pass
 
 
 class Amberg_Mapping(QMainWindow):
