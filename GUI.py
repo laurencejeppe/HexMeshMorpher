@@ -391,11 +391,7 @@ class Amberg_Mapping(QMainWindow):
         # TODO: Refactor this, and add to actual layout, potentiall a pop up window would be better
         self.progressBar = QProgressBar(self)
         self.progressBar.setRange(0,1)
-        layout.addWidget(self.progressBar)
-        button = QPushButton("Start", self)
-        layout.addWidget(button)      
-
-        button.clicked.connect(self.onStart)
+        self.layout.addWidget(self.progressBar)      
 
         self.myLongTask = AmbergThread()
         self.myLongTask.taskFinished.connect(self.onFinished)
