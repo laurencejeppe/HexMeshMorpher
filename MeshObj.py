@@ -91,6 +91,9 @@ class STLMesh(Mesh):
         if load:
             self.load_stl()
 
+        # TODO: Potentially a better idea to not have so many landmark points, but instead have a few, then transform all the rim nodes to the same value. 
+        # This is specifically for the liner meshes and won't help with the collar meshes.
+
     def load_stl(self) -> None:
         """Loads STL file as trimesh object."""
         self.trimesh = tr.load_mesh(self.path())

@@ -7,13 +7,13 @@ Created on Wed Apr  5 19:29:14 2023
 
 import sys
 import os
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import (Qt, pyqtSignal, QThread)
 from PyQt6.QtGui import (QIcon, QAction)
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QVBoxLayout, QComboBox, QPushButton, QHBoxLayout,
                              QCheckBox, QTableWidget, QTableWidgetItem,
                              QGridLayout, QMessageBox, QLineEdit, QLabel,
-                             QHeaderView)
+                             QHeaderView, QProgressBar)
 import MeshObj
 import amberg_mapping
 import RBF_morpher
@@ -273,31 +273,32 @@ class Amberg_Mapping(QMainWindow):
         self.use_faces = QCheckBox()
         self.use_faces.setText("Use Faces")
         self.options_layout.addWidget(self.use_faces, 0, 0)
+        self.use_faces.setChecked(True)
         self.use_landmarks = QCheckBox()
         self.use_landmarks.setText("Use Landmarks")
         self.options_layout.addWidget(self.use_landmarks, 0, 1)
         self.epsilon_text = QLabel("Epsilon")
         self.options_layout.addWidget(self.epsilon_text, 1, 0)
         self.epsilon_edit = QLineEdit()
-        self.epsilon_edit.setInputMask("9") # TODO: Adjust input masks
+        #self.epsilon_edit.setInputMask("9") # TODO: Adjust input masks
         self.epsilon_edit.setPlaceholderText("0.001")
         self.options_layout.addWidget(self.epsilon_edit, 1, 1)
         self.gamma_text = QLabel("Gamma")
         self.options_layout.addWidget(self.gamma_text, 2, 0)
         self.gamma_edit = QLineEdit()
-        self.gamma_edit.setInputMask("9")
+        #self.gamma_edit.setInputMask("9")
         self.gamma_edit.setPlaceholderText("1")
         self.options_layout.addWidget(self.gamma_edit, 2, 1)
         self.neighbors_text = QLabel("Neighbors")
         self.options_layout.addWidget(self.neighbors_text, 3, 0)
         self.neighbors_edit = QLineEdit()
-        self.neighbors_edit.setInputMask("9")
+        #self.neighbors_edit.setInputMask("9")
         self.neighbors_edit.setPlaceholderText("8")
         self.options_layout.addWidget(self.neighbors_edit, 3, 1)
         self.distance_text = QLabel("Distance Threshold")
         self.options_layout.addWidget(self.distance_text, 4, 0)
         self.distance_edit = QLineEdit()
-        self.distance_edit.setInputMask("9")
+        #self.distance_edit.setInputMask("9")
         self.distance_edit.setPlaceholderText("0.1")
         self.options_layout.addWidget(self.distance_edit, 4, 1)
         self.source_text = QLabel("Source Mesh")
@@ -317,6 +318,18 @@ class Amberg_Mapping(QMainWindow):
         self.run_amberg_btn = QPushButton("Run Amberg Mapping")
         self.run_amberg_btn.clicked.connect(self.initiate_amberg)
         self.layout.addWidget(self.run_amberg_btn, 2, 0)
+        
+        # TODO: Refactor this, and add to actual layout, potentiall a pop up window would be better
+        self.progressBar = QProgressBar(self)
+        self.progressBar.setRange(0,1)
+        layout.addWidget(self.progressBar)
+        button = QPushButton("Start", self)
+        layout.addWidget(button)      
+
+        button.clicked.connect(self.onStart)
+
+        self.myLongTask = AmbergThread()
+        self.myLongTask.taskFinished.connect(self.onFinished)
 
         self.mainWidget.setLayout(self.layout)
 
@@ -358,7 +371,7 @@ class Amberg_Mapping(QMainWindow):
         else:
             show_message(message="Please select a row to be deleted first!",
                          title="Delete Loop Error")
-    
+
     def initiate_amberg(self):
         if self.source.count() < 2:
             show_message(message="You need at least two meshes to perform an Amberg Mapping!",
@@ -392,14 +405,27 @@ class Amberg_Mapping(QMainWindow):
             'use_faces':f,
             'use_landmarks':l,
         }
-
+        # TODO: Delete this next line and figure out how to return the output from the thread.
         AM = amberg_mapping.AmbergMapping(sourcey=source, targety=target, mappedy=output, steps=steps, options=options)
         output_mesh = AM.mapped
         self.parent.files[output_mesh.f_name] = output_mesh
         self.parent.file_manager.addRow(output_mesh.f_name, output_mesh)
         self.parent.filesDrop.append(output_mesh.f_name)
         self.close()
+    
+    def onStart(self):
+        self.progressBar.setRange(0,0)
+        self.myLongTask.start()
 
+    def onFinished(self):
+        self.progressBar.setRange(0,1)
+
+class AmbergThread(QThread):
+    taskFinished = pyqtSignal()
+    def run(self, source, targer, output, steps, options):
+        AM = amberg_mapping.AmbergMapping(sourcey=source, targety=targer, mappedy=output, steps=steps, options=options)
+        self.taskFinished.emit(AM)
+    
 class RBF_Morpher(QMainWindow):
     def __init__(self, parent = None):
         super(RBF_Morpher, self).__init__(parent)
