@@ -13,7 +13,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QVBoxLayout, QComboBox, QPushButton, QHBoxLayout,
                              QCheckBox, QTableWidget, QTableWidgetItem,
                              QGridLayout, QMessageBox, QLineEdit, QLabel,
-                             QHeaderView, QProgressBar)
+                             QHeaderView, QDoubleSpinBox, QSpinBox,
+                             QAbstractSpinBox, QStyle, QDialog, QProgressBar)
 import MeshObj
 import amberg_mapping
 import RBF_morpher
@@ -48,7 +49,7 @@ class MeshMorpherGUI(QMainWindow):
 
         self.options_layout = QVBoxLayout()
         self.open_tri_btn = QPushButton("Open TRI Mesh")
-        self.open_tri_btn.clicked.connect(self.load_tri_mesh)
+        self.open_tri_btn.clicked.connect(self.load_mesh_dialog)
         self.options_layout.addWidget(self.open_tri_btn)
         self.open_inp_btn = QPushButton("Open INP Mesh")
         self.open_inp_btn.clicked.connect(self.load_inp_mesh)
@@ -61,7 +62,8 @@ class MeshMorpherGUI(QMainWindow):
         self.layout.addLayout(self.options_layout)
 
         self.mainWidget.setLayout(self.layout)
-        self.resize(600,600)
+        #self.resize(600,600)
+        self.setFixedSize(self.size())
         self.show()
 
     def createActions(self):
@@ -136,6 +138,61 @@ class MeshMorpherGUI(QMainWindow):
         # Load surface stl file
         self.files[file_name] = MeshObj.STLMesh(file_name, file_name,
                                                 self.WDIR)
+        mesh_obj = self.files[file_name]
+        self.file_manager.addRow(file_name, mesh_obj)
+        self.filesDrop.append(file_name)
+
+    
+    def load_mesh_dialog(self, stl=True, inp=True):
+        stl_string = "MESH (*.stl)"
+        inp_string = "ABAQUS (*.inp)"
+        if not stl:
+            typestring = inp_string
+        elif not inp:
+            typestring = stl_string
+        else:
+            typstring = inp_string + ', ' + stl_string
+        
+        fname = self.chooseOpenFile(typestring)
+        
+        if not fname:
+            show_message("Mesh selection has failed")
+            return
+        
+        file_path = fname
+        file_folder_list = file_path[:-4].split('/')[:-1]
+        file_folder_list[0] = file_folder_list[0] + '/'
+        file_folder = os.path.join(*file_folder_list)
+        file_name = file_path[:-4].split('/')[-1]
+
+        if file_path[-4:] == '.inp':
+            # Load inp mesh
+            mesh = MeshObj.INPMesh(file_name, file_name, file_folder)
+            #inp_mesh.rename(file_name, self.WDIR)
+            #inp_mesh.write_stl()   # Save as stl
+            #file_folder = self.WDIR
+        elif file_path[-4:] == '.stl':
+            mesh = MeshObj.STLMesh(file_name, file_name, file_folder)
+        else:
+            show_message("Mesh selection has failed")
+            return
+
+
+        # TODO: Need to finish off this function which will replace the following two seperate functions
+        # Add options to decide if you want to convert the mesh or change the units or just load it as is
+        d = QDialog()
+        main_layout = QHBoxLayout()
+
+
+
+
+        b1 = QPushButton("")
+        d.setWindowTitle("Load Mesh")
+        d.setWindowModality(Qt.WindowModality.ApplicationModal)
+        d.exec()
+
+        self.files[file_name] = MeshObj.STLMesh(file_name, file_name,
+                                                file_folder)
         mesh_obj = self.files[file_name]
         self.file_manager.addRow(file_name, mesh_obj)
         self.filesDrop.append(file_name)
@@ -217,19 +274,28 @@ class MeshMorpherGUI(QMainWindow):
             self.files[item].change_units(factor, units)
             self.file_manager.table.item(row, 3).setText(units)
         
-        
-
     def run_amberg_mapping(self):
         self.amberg_nricp = Amberg_Mapping(self)
         self.amberg_nricp.show()
-
 
     def run_rbf_morpher(self):
         self.rbf_morpher = RBF_Morpher(self)
         self.rbf_morpher.show()
 
     def find_landmarks(self):
+        self.landmark_finder = landmarkFinder(self)
+        self.landmark_finder.show()
+
+
+class Open_Mesh_Dialog(QDialog):
+    def __init__(self, parent = None):
+        super(Open_Mesh_Dialog, self).__init__(parent)
+        # TODO: Fill this in to have a dialog for loading files
+        # to give options how you load the file and what file you
+        # are loading.
+
         pass
+
 
 class Amberg_Mapping(QMainWindow):
     def __init__(self, parent = None):
@@ -279,27 +345,30 @@ class Amberg_Mapping(QMainWindow):
         self.options_layout.addWidget(self.use_landmarks, 0, 1)
         self.epsilon_text = QLabel("Epsilon")
         self.options_layout.addWidget(self.epsilon_text, 1, 0)
-        self.epsilon_edit = QLineEdit()
-        #self.epsilon_edit.setInputMask("9") # TODO: Adjust input masks
-        self.epsilon_edit.setPlaceholderText("0.001")
+        self.epsilon_edit = QDoubleSpinBox()
+        self.epsilon_edit.setDecimals(5)
+        self.epsilon_edit.setRange(0.00001, 0.1)
+        self.epsilon_edit.setValue(0.001)
+        self.epsilon_edit.setStepType(QAbstractSpinBox.StepType.AdaptiveDecimalStepType)
         self.options_layout.addWidget(self.epsilon_edit, 1, 1)
         self.gamma_text = QLabel("Gamma")
         self.options_layout.addWidget(self.gamma_text, 2, 0)
-        self.gamma_edit = QLineEdit()
-        #self.gamma_edit.setInputMask("9")
-        self.gamma_edit.setPlaceholderText("1")
+        self.gamma_edit = QSpinBox()
+        self.gamma_edit.setRange(1, 100)
+        self.gamma_edit.setValue(1)
         self.options_layout.addWidget(self.gamma_edit, 2, 1)
         self.neighbors_text = QLabel("Neighbors")
         self.options_layout.addWidget(self.neighbors_text, 3, 0)
-        self.neighbors_edit = QLineEdit()
-        #self.neighbors_edit.setInputMask("9")
-        self.neighbors_edit.setPlaceholderText("8")
+        self.neighbors_edit = QSpinBox()
+        self.neighbors_edit.setRange(1, 99)
+        self.neighbors_edit.setValue(8)
         self.options_layout.addWidget(self.neighbors_edit, 3, 1)
         self.distance_text = QLabel("Distance Threshold")
         self.options_layout.addWidget(self.distance_text, 4, 0)
-        self.distance_edit = QLineEdit()
-        #self.distance_edit.setInputMask("9")
-        self.distance_edit.setPlaceholderText("0.1")
+        self.distance_edit = QDoubleSpinBox()
+        self.distance_edit.setDecimals(2)
+        self.distance_edit.setRange(0.01, 1)
+        self.distance_edit.setValue(0.1)
         self.options_layout.addWidget(self.distance_edit, 4, 1)
         self.source_text = QLabel("Source Mesh")
         self.options_layout.addWidget(self.source_text, 5, 0)
@@ -333,7 +402,7 @@ class Amberg_Mapping(QMainWindow):
 
         self.mainWidget.setLayout(self.layout)
 
-        self.resize(520,400)
+        self.resize(530,450)
 
     def set_step_table_defaults(self) -> None:
         step_defaults = [
@@ -390,7 +459,7 @@ class Amberg_Mapping(QMainWindow):
         for row in range(rows):
             for col in range(4):
                 steps[row][col] = float(self.table.item(row, col).text())
-        e = float(self.epsilon_edit.text()) if self.epsilon_edit.hasAcceptableInput() else 0.001
+        e = float(self.epsilon_edit.value()) if self.epsilon_edit.hasAcceptableInput() else 0.001
         g = float(self.gamma_edit.text()) if self.gamma_edit.hasAcceptableInput() else 1
         n = int(self.neighbors_edit.text()) if self.neighbors_edit.hasAcceptableInput() else 8
         d = float(self.distance_edit.text()) if self.distance_edit.hasAcceptableInput() else 0.1
@@ -486,6 +555,14 @@ class RBF_Morpher(QMainWindow):
         morphee.write_inp(name)
         self.close()
 
+class landmarkFinder(QMainWindow):
+    def __init__(self, parent = None):
+        super(landmarkFinder, self).__init__(parent)
+        self.setWindowTitle("Landmark Finder")
+        self.mainWidget = QWidget()
+        self.setCentralWidget(self.mainWidget)
+        self.parent = parent
+
 
 class fileManager(QWidget):
     """
@@ -508,17 +585,35 @@ class fileManager(QWidget):
         self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(['Name', 'Type', 'Description', 'Units'])
         self.n = self.table.rowCount()
+        #self.table.verticalHeader().hide()
+        self.table.resizeColumnsToContents()
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.table.horizontalHeader().setSectionsClickable(False)
+        self.table.setCornerButtonEnabled(False)
         # Set the minimum table size to when it is fully expanded
-        self.table.setMinimumWidth(self.table.frameWidth()*2
-                                   + self.table.horizontalHeader().length()
-                                   + self.table.verticalHeader().width())
+        #self.table.setMinimumWidth(self.table.frameWidth()*2
+        #                           + self.table.horizontalHeader().length()
+        #                           + self.table.verticalHeader().width())
+        #self.table.setMaximumWidth(self.table.frameWidth()*2
+        #                           + self.table.horizontalHeader().length()
+        #                           + self.table.verticalHeader().width())
 
     def addRow(self, name, amp):
         self.table.insertRow(self.n)
-        self.table.setItem(self.n, 0, QTableWidgetItem(name))
-        self.table.setItem(self.n, 1, QTableWidgetItem(amp.f_type))
-        self.table.setItem(self.n, 2, QTableWidgetItem(amp.description))
-        self.table.setItem(self.n, 3, QTableWidgetItem(amp.units))
+        name_item = QTableWidgetItem(name)
+        self.table.setItem(self.n, 0, name_item)
+        f_type_item = QTableWidgetItem(amp.f_type)
+        f_type_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.table.setItem(self.n, 1, f_type_item)
+        description_item = QTableWidgetItem(amp.description)
+        self.table.setItem(self.n, 2, description_item)
+        units_item = QTableWidgetItem(amp.units)
+        units_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.table.setItem(self.n, 3, units_item)
         
         self.n = self.table.rowCount()
 
@@ -564,5 +659,7 @@ def show_message(message, message_type="err", title="An Error Occured..."):
 if __name__=="__main__":
     app = QApplication(sys.argv)
     win = MeshMorpherGUI()
+    with open("styles/styles.css", "r", encoding="utf-8") as file:
+        app.setStyleSheet(file.read())
     win.show()
     sys.exit(app.exec())
