@@ -14,7 +14,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QCheckBox, QTableWidget, QTableWidgetItem,
                              QGridLayout, QMessageBox, QLineEdit, QLabel,
                              QHeaderView, QDoubleSpinBox, QSpinBox,
-                             QAbstractSpinBox, QStyle, QDialog, QProgressBar)
+                             QAbstractSpinBox, QStyle, QDialog, QProgressBar,
+                             QTextEdit, QDialogButtonBox)
 import MeshObj
 import amberg_mapping
 import RBF_morpher
@@ -30,8 +31,7 @@ class MeshMorpherGUI(QMainWindow):
             os.makedirs(self.WDIR)
 
         self.initUI()
-        self.load_test_mesh("Offset mesh 3_m")
-        self.load_test_mesh("Torso_noears_m")
+        self.load_test_mesh("AutoCropAlign_AlignCrop_Output")
 
 
     def initUI(self):
@@ -151,7 +151,7 @@ class MeshMorpherGUI(QMainWindow):
         elif not inp:
             typestring = stl_string
         else:
-            typstring = inp_string + ', ' + stl_string
+            typestring = inp_string + ', ' + stl_string
         
         fname = self.chooseOpenFile(typestring)
         
@@ -178,24 +178,20 @@ class MeshMorpherGUI(QMainWindow):
             return
 
 
-        # TODO: Need to finish off this function which will replace the following two seperate functions
-        # Add options to decide if you want to convert the mesh or change the units or just load it as is
-        d = QDialog()
-        main_layout = QHBoxLayout()
+        # TODO: Need to finish off this function which will replace the
+        # following two seperate functions
+        # Add options to decide if you want to convert the mesh or change the
+        # units or just load it as is
+        self.open_mesh_dialog = Open_Mesh_Dialog(mesh, self)
+        self.open_mesh_dialog.accepted.connect(self.load_mesh)
 
 
-
-
-        b1 = QPushButton("")
-        d.setWindowTitle("Load Mesh")
-        d.setWindowModality(Qt.WindowModality.ApplicationModal)
-        d.exec()
-
-        self.files[file_name] = MeshObj.STLMesh(file_name, file_name,
-                                                file_folder)
-        mesh_obj = self.files[file_name]
-        self.file_manager.addRow(file_name, mesh_obj)
-        self.filesDrop.append(file_name)
+    def load_mesh(self):
+        mesh = self.open_mesh_dialog.on_ok_clicked()
+        self.files[mesh.f_name] = mesh
+        mesh_obj = self.files[mesh.f_name]
+        self.file_manager.addRow(mesh.f_name, mesh_obj)
+        self.filesDrop.append(mesh.f_name)
 
 
     def load_tri_mesh(self):
@@ -288,13 +284,56 @@ class MeshMorpherGUI(QMainWindow):
 
 
 class Open_Mesh_Dialog(QDialog):
-    def __init__(self, parent = None):
+    def __init__(self, mesh:MeshObj.Mesh, parent = None):
         super(Open_Mesh_Dialog, self).__init__(parent)
-        # TODO: Fill this in to have a dialog for loading files
-        # to give options how you load the file and what file you
-        # are loading.
+        
+        self.mesh = mesh
 
-        pass
+        self.main_layout = QVBoxLayout()
+
+        self.edits_layout = QGridLayout()
+        self.name_text = QLabel("Name: ")
+        self.name_edit = QLineEdit()
+        self.file_type_text = QLabel("." + self.mesh.f_type)
+        self.name_edit.setText(self.mesh.f_name)
+        self.edits_layout.addWidget(self.name_text, 0, 0)
+        self.edits_layout.addWidget(self.name_edit, 0, 1)
+        self.edits_layout.addWidget(self.file_type_text, 0, 2)
+
+        self.description_text = QLabel("Description: ")
+        self.description_edit = QTextEdit()
+        self.edits_layout.addWidget(self.description_text, 1, 0)
+        self.edits_layout.addWidget(self.description_edit, 1, 1)
+
+        # TODO: Add options for changing the units of the meshes.
+        # Display the bounding box of the mesh being imported and give the
+        # to change the units.
+
+        if mesh.f_type == "inp":
+            self.convert_to_inp = QCheckBox()
+            self.convert_to_inp.setText("Convert to STL")
+            self.edits_layout.addWidget(self.convert_to_inp, 2, 1)
+
+        self.main_layout.addLayout(self.edits_layout)
+
+        QBtn = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        self.buttonBox = QDialogButtonBox(QBtn)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        self.main_layout.addWidget(self.buttonBox)
+
+        self.setLayout(self.main_layout)
+
+        self.setWindowTitle(f"Load: {self.mesh.f_name}")
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+
+    def on_ok_clicked(self):
+        # TODO: Write code that changes the mesh parameters to the inputs
+        # given in the edit boxes
+        # If statement to determine if you need to convert to inp
+        # If statement to determine if you need to change the units
+        # If statements to determine if you need to change the name or description.
+        return self.mesh
 
 
 class Amberg_Mapping(QMainWindow):
@@ -393,9 +432,6 @@ class Amberg_Mapping(QMainWindow):
         self.progressBar.setRange(0,1)
         self.layout.addWidget(self.progressBar)      
 
-        self.myLongTask = AmbergThread()
-        self.myLongTask.taskFinished.connect(self.onFinished)
-
         self.mainWidget.setLayout(self.layout)
 
         self.resize(530,450)
@@ -442,8 +478,8 @@ class Amberg_Mapping(QMainWindow):
             show_message(message="You need at least two meshes to perform an Amberg Mapping!",
                          title="Mesh Error")
             # For testing perposes add 
-            self.target.setCurrentIndex(1)
-            #return # TODO: Make this a return and delete above test file imports
+            #self.target.setCurrentIndex(1)
+            return # TODO: Make this a return and delete above test file imports
         source = self.files[self.source.currentText()]
         target = self.files[self.target.currentText()]
         output = MeshObj.STLMesh('Mapped Liner Surface Mesh',
@@ -470,9 +506,21 @@ class Amberg_Mapping(QMainWindow):
             'use_faces':f,
             'use_landmarks':l,
         }
+
+        thread = AmbergThread(source=source, target=target, output=output, steps=steps, options=options, callback=self.handle_result)
+        thread.start()
+
         # TODO: Delete this next line and figure out how to return the output from the thread.
-        AM = amberg_mapping.AmbergMapping(sourcey=source, targety=target, mappedy=output, steps=steps, options=options)
-        output_mesh = AM.mapped
+        #AM = amberg_mapping.AmbergMapping(sourcey=source, targety=target, mappedy=output, steps=steps, options=options)
+        #output_mesh = AM.mapped
+        #self.parent.files[output_mesh.f_name] = output_mesh
+        #self.parent.file_manager.addRow(output_mesh.f_name, output_mesh)
+        #self.parent.filesDrop.append(output_mesh.f_name)
+        #self.close()
+
+    def handle_result(self, result:amberg_mapping.AmbergMapping):
+        self.progressBar.setRange(0,1)
+        output_mesh = result.mapped
         self.parent.files[output_mesh.f_name] = output_mesh
         self.parent.file_manager.addRow(output_mesh.f_name, output_mesh)
         self.parent.filesDrop.append(output_mesh.f_name)
@@ -482,13 +530,20 @@ class Amberg_Mapping(QMainWindow):
         self.progressBar.setRange(0,0)
         self.myLongTask.start()
 
-    def onFinished(self):
-        self.progressBar.setRange(0,1)
-
 class AmbergThread(QThread):
-    taskFinished = pyqtSignal()
-    def run(self, source, targer, output, steps, options):
-        AM = amberg_mapping.AmbergMapping(sourcey=source, targety=targer, mappedy=output, steps=steps, options=options)
+    taskFinished = pyqtSignal(object)
+
+    def __init__(self, source, target, output, steps, options, callback, parent=None):
+        QThread.__init__(self, parent)
+        self.taskFinished.connect(callback)
+        self.source = source
+        self.target = target
+        self.output = output
+        self.steps = steps
+        self.options = options
+
+    def run(self):
+        AM = amberg_mapping.AmbergMapping(sourcey=self.source, targety=self.target, mappedy=self.output, steps=self.steps, options=self.options)
         self.taskFinished.emit(AM)
     
 class RBF_Morpher(QMainWindow):
@@ -535,10 +590,10 @@ class RBF_Morpher(QMainWindow):
             show_message(message="You need at least two meshes to perform an Amberg Mapping!",
                          title="Mesh Error")
             # For testing perposes add
-            self.unmapped.setCurrentIndex(0)
-            self.mapped.setCurrentIndex(1)
-            self.morphee.setCurrentIndex(2)
-            # return # TODO: Make this a return and delete above test file imports
+            #self.unmapped.setCurrentIndex(0)
+            #self.mapped.setCurrentIndex(1)
+            #self.morphee.setCurrentIndex(2)
+            return # TODO: Make this a return and delete above test file imports
         unmapped = self.files[self.unmapped.currentText()]
         mapped = self.files[self.mapped.currentText()]
         morphee = self.files[self.morphee.currentText()]
