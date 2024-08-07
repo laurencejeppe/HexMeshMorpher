@@ -106,10 +106,17 @@ class STLMesh(Mesh):
         else:
             self.units = "m"
 
-    def save_trimesh_as_stl(self, name=None) -> None:
+    def save_mesh(self, file_path):
+        self.save_trimesh_as_stl(file_path=file_path)
+
+    def save_trimesh_as_stl(self, name=None, file_path=None) -> None:
         """Saves trimesh object as an STL."""
-        self.trimesh.export(self.path(name))
-        print(f"File successfully saved as {self.path(name)}")
+        if file_path:
+            f_path = file_path
+        elif name:
+            f_path = self.path(name)
+        self.trimesh.export(f_path)
+        print(f"File successfully saved as {f_path}")
 
     def save_trimesh_as_npy(self) -> None:
         """A function that saves a trimeshe's vertices and faces in npy files. This was implemented
@@ -405,10 +412,17 @@ class INPMesh(Mesh):
         else:
             raise ParsingError(keyword_input, "Check that the input file is correctly written.")
 
-    def write_inp(self, file_name: str):
+    def save_mesh(self, file_path):
+        self.write_inp(file_path=file_path)
+
+    def write_inp(self, file_name: str=None, file_path: str=None):
         """Write the changed inp file."""
-        file_name = file_name[:-4] if file_name[-4:] == '.inp' else file_name
-        with open(self.path(file_name), 'w', encoding="utf-8") as file:
+        if file_path:
+            f_path = file_path
+        elif file_name:
+            file_name = file_name[:-4] if file_name[-4:] == '.inp' else file_name
+            f_path = self.path(file_name)
+        with open(f_path, 'w', encoding="utf-8") as file:
             for line in self._inp_head:
                 file.write(line)
             #file.write(f'{self.part_head}\n')
@@ -425,11 +439,15 @@ class INPMesh(Mesh):
             for line in self._inp_tail:
                 file.write(line)
 
-    def write_stl(self):
+    def write_stl(self, file_path:str=None):
         """Writes the inp mesh as a stl."""
         if len(self.elements[0]) != 4:
             raise ValueError('You cannot only convert a trimesh to stl')
-        with open(self.path(file_type='stl'), 'w', encoding="utf-8") as file:
+        if file_path:
+            path = file_path
+        else:
+            path = self.path(file_type='stl')
+        with open(path, 'w', encoding="utf-8") as file:
             file.write(f'solid "{self.part_name}"\n')
             for element in self.elements:
                 nodes = self.nodes[[i-1 for i in element[1:]]]

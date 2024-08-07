@@ -31,7 +31,6 @@ class MeshMorpherGUI(QMainWindow):
             os.makedirs(self.WDIR)
 
         self.initUI()
-        self.load_test_mesh("AutoCropAlign_AlignCrop_Output")
 
 
     def initUI(self):
@@ -78,7 +77,7 @@ class MeshMorpherGUI(QMainWindow):
                                   self, triggered=self.choose_WDIR)
         self.saveFile = QAction(QIcon('open.png'), 'Save', self,
                                 shortcut='Ctrl+S',
-                                triggered=self.chooseSaveFile)
+                                triggered=self.save_meshes)
         self.exitAct = QAction("E&xit", self, shortcut="Ctrl+Q",
                                triggered=self.close)
         self.runAmberg = QAction(QIcon('open.png'), 'Run Amberg',
@@ -87,7 +86,6 @@ class MeshMorpherGUI(QMainWindow):
                               self, triggered=self.run_rbf_morpher)
         self.findLandmarks = QAction(QIcon("open.png"), 'Find Landmakrs',
                                      self, triggered=self.find_landmarks)
-
 
     def createMenus(self):
         """
@@ -107,7 +105,7 @@ class MeshMorpherGUI(QMainWindow):
         self.toolsMenu.addAction(self.findLandmarks)
 
     def chooseOpenFile(self, type_filter: str, prompt:str='Open File'):
-        """ Handles importing and reading of new files """
+        """ Opens the file dialog to select a file to open. """
         fname = QFileDialog.getOpenFileName(self,
                                             prompt,
                                             directory=self.WDIR,
@@ -117,44 +115,51 @@ class MeshMorpherGUI(QMainWindow):
             return None
         return fname[0]
 
-    def chooseSaveFile(self):
+    def chooseSaveFile(self, type_filter: str, prompt: str='Save File'):
+        """ Opens the file dialog to select a save location. """
         fname = QFileDialog.getSaveFileName(self,
-                                            'Save file',
+                                            caption=prompt,
                                             directory=self.WDIR,
-                                            filter="ABAQUS (*.inp)")
+                                            filter=type_filter)
 
         if fname[0] == '':
             show_message("Error loading mesh!")
             return
-        file_name = fname[0]
+        return fname[0]
 
     def choose_WDIR(self):
         _dir = QFileDialog.getExistingDirectory(self,
                                                 'Select Directory',
                                                 directory=self.WDIR)
         self.WDIR = _dir
-    
-    def load_test_mesh(self, file_name):
-        # Load surface stl file
-        self.files[file_name] = MeshObj.STLMesh(file_name, file_name,
-                                                self.WDIR)
-        mesh_obj = self.files[file_name]
-        self.file_manager.addRow(file_name, mesh_obj)
-        self.filesDrop.append(file_name)
+
+    def save_meshes(self):
+        if not self.file_manager.table.selectedItems():
+            show_message(message="Please select a mesh in the table to change the units first!",
+                         title="Item Selection Error")
+        rows = []
+        for item in self.file_manager.table.selectedItems():
+            rows.append(self.file_manager.table.row(item))
+        rows = set(rows)
+        file_type_dict = {'stl':"MESH (*.stl)",
+                          'inp':"ABAQUS (*.inp)"}
+        for row in rows:
+            item = self.file_manager.table.item(row, 0).text()
+            item_type = self.file_manager.table.item(row, 1).text()
+            f_path = self.chooseSaveFile(file_type_dict[item_type])
+            self.files[item].save_mesh(file_path=f_path)
+            
 
     
     def load_mesh_dialog(self, stl=True, inp=True):
         stl_string = "MESH (*.stl)"
         inp_string = "ABAQUS (*.inp)"
         if not stl:
-            print("Not stl!")
             typestring = inp_string
         elif not inp:
-            print("Not INP")
             typestring = stl_string
         else:
             typestring = inp_string + ';; ' + stl_string
-            print(typestring)
         
         fname = self.chooseOpenFile(typestring)
         
@@ -176,17 +181,16 @@ class MeshMorpherGUI(QMainWindow):
             show_message("Mesh selection has failed")
             return
 
-        self.open_mesh_dialog = Open_Mesh_Dialog(mesh, self)
+        self.open_mesh_dialog = Mesh_Options_Dialog(mesh, self)
         self.open_mesh_dialog.accepted.connect(self.load_mesh)
-
+        self.open_mesh_dialog.exec()
 
     def load_mesh(self):
-        mesh = self.open_mesh_dialog.on_ok_clicked()
+        mesh = self.open_mesh_dialog.retrieve_mesh_obj()
         self.files[mesh.f_name] = mesh
         mesh_obj = self.files[mesh.f_name]
         self.file_manager.addRow(mesh.f_name, mesh_obj)
         self.filesDrop.append(mesh.f_name)
-
 
     def load_stl_mesh(self):
         """
@@ -209,7 +213,6 @@ class MeshMorpherGUI(QMainWindow):
             rows.append(self.file_manager.table.row(item))
         rows = set(rows)
         for row in rows:
-            row = self.file_manager.table.currentRow()
             item = self.file_manager.table.item(row, 0).text()
             units = self.file_manager.table.item(row, 3).text()
             units = "mm" if units == "m" else "m"
@@ -230,9 +233,9 @@ class MeshMorpherGUI(QMainWindow):
         self.landmark_finder.show()
 
 
-class Open_Mesh_Dialog(QDialog):
+class Mesh_Options_Dialog(QDialog):
     def __init__(self, mesh:MeshObj.Mesh, parent = None):
-        super(Open_Mesh_Dialog, self).__init__(parent)
+        super(Mesh_Options_Dialog, self).__init__(parent)
         
         self.mesh = mesh
 
@@ -249,6 +252,7 @@ class Open_Mesh_Dialog(QDialog):
 
         self.description_text = QLabel("Description: ")
         self.description_edit = QTextEdit()
+        self.description_edit.setPlaceholderText("Add description")
         self.edits_layout.addWidget(self.description_text, 1, 0)
         self.edits_layout.addWidget(self.description_edit, 1, 1)
 
@@ -278,11 +282,10 @@ class Open_Mesh_Dialog(QDialog):
 
         self.setWindowTitle(f"Load: {self.mesh.f_name}")
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
-        self.exec()
 
-    def on_ok_clicked(self):
-        self.mesh.rename(self.name_edit.currentText())
-        description = self.description_edit.currentText()
+    def retrieve_mesh_obj(self):
+        self.mesh.rename(self.name_edit.text())
+        description = self.description_edit.toPlainText()
 
         if self.unit_change_check_box.isChecked():
             if self.mesh.units == "mm":
@@ -294,7 +297,7 @@ class Open_Mesh_Dialog(QDialog):
             self.mesh.write_stl()
             self.mesh = MeshObj.STLMesh(self.mesh.f_name, self.mesh.f_name, self.mesh.f_folder)
 
-        description = self.description_edit.currentText()
+        description = self.description_edit.toPlainText()
         self.mesh.description = description
 
         return self.mesh
@@ -441,15 +444,17 @@ class Amberg_Mapping(QMainWindow):
         if self.source.count() < 2:
             show_message(message="You need at least two meshes to perform an Amberg Mapping!",
                          title="Mesh Error")
-            # For testing perposes add 
-            #self.target.setCurrentIndex(1)
-            return # TODO: Make this a return and delete above test file imports
+            return
         source = self.files[self.source.currentText()]
         target = self.files[self.target.currentText()]
-        output = MeshObj.STLMesh('Mapped Liner Surface Mesh',
+        assert source.units == target.units, "The source and target must have the same units!"
+        description = f"Mapping from {self.source.currentText()} to {self.target.currentText()}"
+        output = MeshObj.STLMesh('MappedMesh',
                                  'MappedMesh',
                                  f_folder=self.WDIR,
+                                 description=description,
                                  load=False)
+        output.set_units(source.units)
         rows = self.table.rowCount()
         steps = [[None for i in range(4)] for j in range(rows)]
         for row in range(rows):
@@ -471,16 +476,8 @@ class Amberg_Mapping(QMainWindow):
             'use_landmarks':l,
         }
 
-        thread = AmbergThread(source=source, target=target, output=output, steps=steps, options=options, callback=self.handle_result)
-        thread.start()
-
-        # TODO: Delete this next line and figure out how to return the output from the thread.
-        #AM = amberg_mapping.AmbergMapping(sourcey=source, targety=target, mappedy=output, steps=steps, options=options)
-        #output_mesh = AM.mapped
-        #self.parent.files[output_mesh.f_name] = output_mesh
-        #self.parent.file_manager.addRow(output_mesh.f_name, output_mesh)
-        #self.parent.filesDrop.append(output_mesh.f_name)
-        #self.close()
+        self.thread = AmbergThread(source=source, target=target, output=output, steps=steps, options=options, callback=self.handle_result)
+        self.thread.start()
 
     def handle_result(self, result:amberg_mapping.AmbergMapping):
         self.progressBar.setRange(0,1)
