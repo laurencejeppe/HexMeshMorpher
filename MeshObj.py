@@ -282,6 +282,19 @@ class STLMesh(Mesh):
         self.trimesh.apply_scale(factor)
         self.units = units
 
+    def get_bounding_box(self) -> list:
+        maximums = [coord for coord in self.nodes[0, 1:]]
+        minimums = [coord for coord in self.nodes[0, 1:]]
+        for node in self.nodes:
+            for i, coord in enumerate(node[1:]):
+                if coord > maximums[i]:
+                    maximums[i] = coord
+                elif coord < minimums[i]:
+                    minimums[i] = coord
+        centroid = [ (maximums[i] + minimums[i])/2 for i in range(3)]
+        difference = [ maximums[i] - minimums[i] for i in range(3)]
+        return centroid, difference, maximums, minimums
+
 
 
 class INPMesh(Mesh):
@@ -479,6 +492,21 @@ class INPMesh(Mesh):
         file_path = os.path.join(self.f_path, self.f_folder, file_name)
         self.boundary_nodes_path = file_path
         np.save(file_path, self.boundary_nodes)
+
+    def get_bounding_box(self) -> list:
+        """ Somewhat redundent seeing as I have the units check in the load mesh."""
+        maximums = [coord for coord in self.nodes[0, 1:]]
+        minimums = [coord for coord in self.nodes[0, 1:]]
+        for node in self.nodes:
+            for i, coord in enumerate(node[1:]):
+                if coord > maximums[i]:
+                    maximums[i] = coord
+                elif coord < minimums[i]:
+                    minimums[i] = coord
+        centroid = [ (maximums[i] + minimums[i])/2 for i in range(3)]
+        difference = [ maximums[i] - minimums[i] for i in range(3)]
+        return centroid, difference, maximums, minimums
+
 
 def cut_meshes(meshes: list[STLMesh],
                offset:float=0.210,

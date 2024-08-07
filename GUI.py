@@ -48,8 +48,8 @@ class MeshMorpherGUI(QMainWindow):
         self.layout.addWidget(self.file_manager)
 
         self.options_layout = QVBoxLayout()
-        self.open_tri_btn = QPushButton("Open TRI Mesh")
-        self.open_tri_btn.clicked.connect(self.load_mesh_dialog)
+        self.open_tri_btn = QPushButton("Open STL Mesh")
+        self.open_tri_btn.clicked.connect(self.load_stl_mesh)
         self.options_layout.addWidget(self.open_tri_btn)
         self.open_inp_btn = QPushButton("Open INP Mesh")
         self.open_inp_btn.clicked.connect(self.load_inp_mesh)
@@ -70,8 +70,8 @@ class MeshMorpherGUI(QMainWindow):
         self.openFile = QAction(QIcon('open.png'), 'Open', self,
                                 shortcut='Ctrl+O',
                                 triggered=self.chooseOpenFile)
-        self.openTRImesh = QAction(QIcon('open.png'), 'Open TRI', self,
-                                    triggered=self.load_tri_mesh)
+        self.openSTLmesh = QAction(QIcon('open.png'), 'Open TRI', self,
+                                    triggered=self.load_stl_mesh)
         self.openINPmesh = QAction(QIcon("open.png"), 'Open INP', self,
                                    triggered=self.load_inp_mesh)
         self.choose_wdir = QAction(QIcon('open.png'), 'Choose Working Directory',
@@ -95,7 +95,7 @@ class MeshMorpherGUI(QMainWindow):
         """
         self.fileMenu = self.menuBar().addMenu("&File")
         self.fileMenu.addAction(self.openFile)
-        self.fileMenu.addAction(self.openTRImesh)
+        self.fileMenu.addAction(self.openSTLmesh)
         self.fileMenu.addAction(self.openINPmesh)
         self.fileMenu.addAction(self.choose_wdir)
         self.fileMenu.addAction(self.saveFile)
@@ -147,11 +147,14 @@ class MeshMorpherGUI(QMainWindow):
         stl_string = "MESH (*.stl)"
         inp_string = "ABAQUS (*.inp)"
         if not stl:
+            print("Not stl!")
             typestring = inp_string
         elif not inp:
+            print("Not INP")
             typestring = stl_string
         else:
-            typestring = inp_string + ', ' + stl_string
+            typestring = inp_string + ';; ' + stl_string
+            print(typestring)
         
         fname = self.chooseOpenFile(typestring)
         
@@ -166,22 +169,13 @@ class MeshMorpherGUI(QMainWindow):
         file_name = file_path[:-4].split('/')[-1]
 
         if file_path[-4:] == '.inp':
-            # Load inp mesh
             mesh = MeshObj.INPMesh(file_name, file_name, file_folder)
-            #inp_mesh.rename(file_name, self.WDIR)
-            #inp_mesh.write_stl()   # Save as stl
-            #file_folder = self.WDIR
         elif file_path[-4:] == '.stl':
             mesh = MeshObj.STLMesh(file_name, file_name, file_folder)
         else:
             show_message("Mesh selection has failed")
             return
 
-
-        # TODO: Need to finish off this function which will replace the
-        # following two seperate functions
-        # Add options to decide if you want to convert the mesh or change the
-        # units or just load it as is
         self.open_mesh_dialog = Open_Mesh_Dialog(mesh, self)
         self.open_mesh_dialog.accepted.connect(self.load_mesh)
 
@@ -194,64 +188,17 @@ class MeshMorpherGUI(QMainWindow):
         self.filesDrop.append(mesh.f_name)
 
 
-    def load_tri_mesh(self):
+    def load_stl_mesh(self):
         """
-        This is used to load a tri mesh created as either an stl or inp.
-        If an inp is selected it will save it as an stl and load the stl.
-        The loaded stl is then returned in a MeshObj STLMesh Object.
-        If from_inp: the inp mesh is loaded converted to an stl file, saved
-        and loaded.
-        else: the stl file is loaded.
+        This will open the load mesh dialog to select stl loading options.
         """
-        fname = self.chooseOpenFile("ABAQUS (*.inp), MESH (*.stl)")
-        if not fname:
-            return
-        file_path = fname
-        file_folder_list = file_path[:-4].split('/')[:-1]
-        file_folder_list[0] = file_folder_list[0] + '/'
-        file_folder = os.path.join(*file_folder_list)
-        file_name = file_path[:-4].split('/')[-1]
-
-        if file_path[-4:] == '.inp':
-            # Load liner surface inp file
-            liner_surface_inp = MeshObj.INPMesh(file_name, file_name,
-                                                     file_folder)
-            liner_surface_inp.rename(file_name, self.WDIR)
-            liner_surface_inp.write_stl()   # Save as stl
-            file_folder = self.WDIR
-        elif file_path[-4:] != '.stl':
-            return
-        
-        
-        # Load surface stl file
-        self.files[file_name] = MeshObj.STLMesh(file_name, file_name,
-                                                file_folder)
-        mesh_obj = self.files[file_name]
-        self.file_manager.addRow(file_name, mesh_obj)
-        self.filesDrop.append(file_name)
+        self.load_mesh_dialog()
 
     def load_inp_mesh(self):
-        fname = self.chooseOpenFile("ABAQUS (*.inp)")
-        if not fname:
-            return
-        file_path = fname
-        file_folder_list = file_path[:-4].split('/')[:-1]
-        file_folder_list[0] = file_folder_list[0] + '/'
-        file_folder = os.path.join(*file_folder_list)
-        file_name = file_path[:-4].split('/')[-1]
-
-        if file_path[-4:] == '.inp':
-            # Load liner surface inp file
-            inp = MeshObj.INPMesh(file_name, file_name, file_folder)
-            inp.rename(file_name, self.WDIR)
-            file_folder = self.WDIR
-        else:
-            return
-        
-        # Load surface stl file
-        self.files[file_name] = inp
-        self.file_manager.addRow(file_name, inp)
-        self.filesDrop.append(file_name)
+        """
+        This will open the load mesh dialog to select inp loading options.
+        """
+        self.load_mesh_dialog()
 
     def change_mesh_units(self):
         if not self.file_manager.table.selectedItems():
@@ -305,16 +252,21 @@ class Open_Mesh_Dialog(QDialog):
         self.edits_layout.addWidget(self.description_text, 1, 0)
         self.edits_layout.addWidget(self.description_edit, 1, 1)
 
-        # TODO: Add options for changing the units of the meshes.
-        # Display the bounding box of the mesh being imported and give the
-        # to change the units.
-
-        if mesh.f_type == "inp":
-            self.convert_to_inp = QCheckBox()
-            self.convert_to_inp.setText("Convert to STL")
-            self.edits_layout.addWidget(self.convert_to_inp, 2, 1)
-
         self.main_layout.addLayout(self.edits_layout)
+
+        self.unit_change_check_box = QCheckBox()
+        if self.mesh.units == "mm":
+            checkbox_string = "Convert mm to m"
+        elif self.mesh.units == "m":
+            checkbox_string = "Convert m to mm"
+        self.unit_change_check_box.setText(checkbox_string)
+        self.main_layout.addWidget(self.unit_change_check_box)
+
+        
+        self.convert_to_stl = QCheckBox()
+        self.convert_to_stl.setText("Convert to STL")
+        if mesh.f_type == "inp":
+            self.main_layout.addWidget(self.convert_to_stl)
 
         QBtn = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.buttonBox = QDialogButtonBox(QBtn)
@@ -326,13 +278,25 @@ class Open_Mesh_Dialog(QDialog):
 
         self.setWindowTitle(f"Load: {self.mesh.f_name}")
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.exec()
 
     def on_ok_clicked(self):
-        # TODO: Write code that changes the mesh parameters to the inputs
-        # given in the edit boxes
-        # If statement to determine if you need to convert to inp
-        # If statement to determine if you need to change the units
-        # If statements to determine if you need to change the name or description.
+        self.mesh.rename(self.name_edit.currentText())
+        description = self.description_edit.currentText()
+
+        if self.unit_change_check_box.isChecked():
+            if self.mesh.units == "mm":
+                self.mesh.change_units(0.001, "m")
+            elif self.mesh.units == "m":
+                self.mesh.change_units(1000, "mm")
+
+        if self.convert_to_stl.isChecked():
+            self.mesh.write_stl()
+            self.mesh = MeshObj.STLMesh(self.mesh.f_name, self.mesh.f_name, self.mesh.f_folder)
+
+        description = self.description_edit.currentText()
+        self.mesh.description = description
+
         return self.mesh
 
 
