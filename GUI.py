@@ -287,11 +287,13 @@ class Mesh_Options_Dialog(QDialog):
         self.mesh.rename(self.name_edit.text())
         description = self.description_edit.toPlainText()
 
-        if self.unit_change_check_box.isChecked():
-            if self.mesh.units == "mm":
-                self.mesh.change_units(0.001, "m")
-            elif self.mesh.units == "m":
-                self.mesh.change_units(1000, "mm")
+        # TODO: Fix the units options during inport as some meshes are not recognised properly
+
+        #if self.unit_change_check_box.isChecked():
+        #    if self.mesh.units == "mm":
+        #        self.mesh.change_units(0.001, "m")
+        #    elif self.mesh.units == "m":
+        #        self.mesh.change_units(1000, "mm")
 
         if self.convert_to_stl.isChecked():
             self.mesh.write_stl()
@@ -397,7 +399,7 @@ class Amberg_Mapping(QMainWindow):
         # TODO: Refactor this, and add to actual layout, potentiall a pop up window would be better
         self.progressBar = QProgressBar(self)
         self.progressBar.setRange(0,1)
-        self.layout.addWidget(self.progressBar)      
+        self.layout.addWidget(self.progressBar)
 
         self.mainWidget.setLayout(self.layout)
 
@@ -422,7 +424,7 @@ class Amberg_Mapping(QMainWindow):
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-    
+
     def add_loop(self):
         default_row = [0.01, 0, 0.5, 10]
         if self.table.currentRow():
@@ -476,8 +478,14 @@ class Amberg_Mapping(QMainWindow):
             'use_landmarks':l,
         }
 
-        self.thread = AmbergThread(source=source, target=target, output=output, steps=steps, options=options, callback=self.handle_result)
-        self.thread.start()
+        thread = False # TODO: Threading actually does work you numpty
+
+        if thread:
+            self.thread = AmbergThread(source=source, target=target, output=output, steps=steps, options=options, callback=self.handle_result)
+            self.thread.start()
+        else:
+            AM = amberg_mapping.AmbergMapping(sourcey=source, targety=target, mappedy=output, steps=steps, options=options)
+            self.handle_result(AM)
 
     def handle_result(self, result:amberg_mapping.AmbergMapping):
         self.progressBar.setRange(0,1)
@@ -506,7 +514,7 @@ class AmbergThread(QThread):
     def run(self):
         AM = amberg_mapping.AmbergMapping(sourcey=self.source, targety=self.target, mappedy=self.output, steps=self.steps, options=self.options)
         self.taskFinished.emit(AM)
-    
+
 class RBF_Morpher(QMainWindow):
     def __init__(self, parent = None):
         super(RBF_Morpher, self).__init__(parent)
@@ -547,14 +555,10 @@ class RBF_Morpher(QMainWindow):
         self.resize(520,400)
 
     def initiate_morph(self):
-        if self.source.count() < 3:
+        if self.unmapped.count() < 3:
             show_message(message="You need at least two meshes to perform an Amberg Mapping!",
                          title="Mesh Error")
-            # For testing perposes add
-            #self.unmapped.setCurrentIndex(0)
-            #self.mapped.setCurrentIndex(1)
-            #self.morphee.setCurrentIndex(2)
-            return # TODO: Make this a return and delete above test file imports
+            return
         unmapped = self.files[self.unmapped.currentText()]
         mapped = self.files[self.mapped.currentText()]
         morphee = self.files[self.morphee.currentText()]

@@ -52,7 +52,7 @@ class AmbergMapping:
         self.picking_buffer = []
         if lpairs:
             self.landmark_pairs = lpairs # [source vertex index, target vertex position vector]
-
+        
         self.run_amberg()
 
     def run_amberg(self):
@@ -91,6 +91,7 @@ class AmbergMapping:
             self.mapped.trimesh = tr.Trimesh(vertices=morphed_vertices,
                                              faces=self.source.trimesh.faces)
             print("Amberg Mapping Completed in "+str(time.time()-start_time)+"s")
+
 
     def find_vertex_index(self, mesh: MeshObj.STLMesh, vertex):
         """Finds the index of a vertex in the mesh [mesh_name] given its position."""

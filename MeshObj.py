@@ -115,7 +115,7 @@ class STLMesh(Mesh):
             f_path = file_path
         elif name:
             f_path = self.path(name)
-        self.trimesh.export(f_path)
+        self.trimesh.export(file_obj=f_path, file_type='stl_ascii')
         print(f"File successfully saved as {f_path}")
 
     def save_trimesh_as_npy(self) -> None:
@@ -374,7 +374,7 @@ class INPMesh(Mesh):
         else:
             self._inp_tail = data_list[elem_end:]
 
-        x1 = np.max(self.nodes[:,0])
+        x1 = np.max(self.nodes[:,0]) # TODO: Don't fix this
         x2 = np.min(self.nodes[:,0])
         if abs(x1 - x2) > 1:
             self.units = "mm"
