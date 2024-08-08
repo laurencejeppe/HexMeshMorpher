@@ -471,19 +471,30 @@ class Amberg_Mapping(QMainWindow):
         options = {
             'gamma':g,
             'epsilon':e,
-            'neighbors_count':n,
+            'neighbors':n,
             'distance_threshold':d,
             'use_faces':f,
             'use_landmarks':l,
         }
 
-        thread = False # TODO: Threading actually does work you numpty
+        print(f"Input option use landmark pairs: {options['use_landmarks']}")
+
+        thread = True # TODO: Threading actually does work you numpty
 
         if thread:
-            self.thread = AmbergThread(source=source, target=target, output=output, steps=steps, options=options, callback=self.handle_result)
+            self.thread = AmbergThread(source=source,
+                                       target=target,
+                                       output=output,
+                                       steps=steps,
+                                       options=options,
+                                       callback=self.handle_result)
             self.thread.start()
         else:
-            AM = amberg_mapping.AmbergMapping(sourcey=source, targety=target, mappedy=output, steps=steps, options=options)
+            AM = amberg_mapping.AmbergMapping(sourcey=source,
+                                              targety=target,
+                                              mappedy=output,
+                                              steps=steps,
+                                              options=options)
             self.handle_result(AM)
 
     def handle_result(self, result:amberg_mapping.AmbergMapping):
@@ -511,7 +522,18 @@ class AmbergThread(QThread):
         self.options = options
 
     def run(self):
-        AM = amberg_mapping.AmbergMapping(sourcey=self.source, targety=self.target, mappedy=self.output, steps=self.steps, options=self.options)
+        lpairs = [[1, [0.0625779, -0.0421632, 0.0119162]], # Top Left
+                  [200, [-0.0636008, -0.0421502, 0.0119019]], # Top Right
+                  [10101, [0.0461566, -0.113105, -0.00230067]], # Bottom Left
+                  [10200, [-0.0484762, -0.113245, -0.00233835]]] # Bottom Right
+        print(lpairs)
+
+        AM = amberg_mapping.AmbergMapping(sourcey=self.source,
+                                          targety=self.target,
+                                          mappedy=self.output,
+                                          steps=self.steps,
+                                          options=self.options,
+                                          lpairs=lpairs)
         self.taskFinished.emit(AM)
 
 class RBF_Morpher(QMainWindow):

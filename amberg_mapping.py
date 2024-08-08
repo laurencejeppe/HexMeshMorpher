@@ -19,24 +19,19 @@ class AmbergMapping:
         self.source = sourcey
         self.target = targety
         self.mapped = mappedy
-        self.gamma = 1
-        self.epsilon = 0.001
-        self.neighbors_count = 8
-        self.distance_threshold = 0.1
-        self.use_faces = False # Changing to True causes error (installed rtree with pip to solve)
-        self.use_landmarks = False
-        ops = {
-            'gamma':self.gamma,
-            'epsilon':self.epsilon,
-            'neighbors':self.neighbors_count,
-            'distance_threshold':self.distance_threshold,
-            'use_faces':self.use_faces,
-            'use_landmarks':self.use_landmarks,
-        }
+        self.ops = {
+            'gamma':1,
+            'epsilon':0.001,
+            'neighbors':8,
+            'distance_threshold':0.1,
+            'use_faces':False, # Changing to True causes error (installed rtree with pip to solve)
+            'use_landmarks':False,
+        } # Default values
         if options:
-            for item in ops:
-                if item in options: ops[item] = options[item]
-        
+            for item in self.ops:
+                if item in options:
+                    self.ops[item] = options[item]
+
         if steps:
             self.steps = steps
         else:
@@ -52,12 +47,12 @@ class AmbergMapping:
         self.picking_buffer = []
         if lpairs:
             self.landmark_pairs = lpairs # [source vertex index, target vertex position vector]
-        
+
         self.run_amberg()
 
     def run_amberg(self):
         """Runs the amberg mapping."""
-        if self.use_landmarks:
+        if self.ops['use_landmarks']:
             source_indices = [pair[0] for pair in self.landmark_pairs]
             target_points = [pair[1] for pair in self.landmark_pairs]
 
@@ -66,14 +61,14 @@ class AmbergMapping:
             morphed_vertices \
                 = tr.registration.nricp_amberg(self.source.trimesh,
                                                 self.target.trimesh,
-                                                use_faces=self.use_faces,
+                                                use_faces=self.ops['use_faces'],
                                                 source_landmarks=source_indices,
                                                 target_positions=target_points,
                                                 steps=self.steps,
-                                                gamma=self.gamma,
-                                                eps=self.epsilon,
-                                                neighbors_count=self.neighbors_count,
-                                                distance_threshold=self.distance_threshold)
+                                                gamma=self.ops['gamma'],
+                                                eps=self.ops['epsilon'],
+                                                neighbors_count=self.ops['neighbors'],
+                                                distance_threshold=self.ops['distance_threshold'])
             self.mapped.trimesh = tr.Trimesh(vertices=morphed_vertices,
                                                 faces=self.source.trimesh.faces)
             print("Amberg Mapping Completed in " + str(time.time() - start_time) + "s")
@@ -82,12 +77,12 @@ class AmbergMapping:
             print("Performing Amberg Mapping")
             morphed_vertices = tr.registration.nricp_amberg(self.source.trimesh,
                                                             self.target.trimesh,
-                                                            use_faces=self.use_faces,
+                                                            use_faces=self.ops['use_faces'],
                                                             steps=self.steps,
-                                                            gamma=self.gamma,
-                                                            eps=self.epsilon,
-                                                            neighbors_count=self.neighbors_count,
-                                                            distance_threshold=self.distance_threshold)
+                                                            gamma=self.ops['gamma'],
+                                                            eps=self.ops['epsilon'],
+                                                            neighbors_count=self.ops['neighbors'],
+                                                            distance_threshold=self.ops['distance_threshold'])
             self.mapped.trimesh = tr.Trimesh(vertices=morphed_vertices,
                                              faces=self.source.trimesh.faces)
             print("Amberg Mapping Completed in "+str(time.time()-start_time)+"s")
