@@ -260,6 +260,7 @@ class Mesh_Options_Dialog(QDialog):
 
         self.unit_change_check_box = QCheckBox()
         if self.mesh.units == "mm":
+            print(self.mesh.units)
             checkbox_string = "Convert mm to m"
         elif self.mesh.units == "m":
             checkbox_string = "Convert m to mm"
@@ -287,13 +288,11 @@ class Mesh_Options_Dialog(QDialog):
         self.mesh.rename(self.name_edit.text())
         description = self.description_edit.toPlainText()
 
-        # TODO: Fix the units options during inport as some meshes are not recognised properly
-
-        #if self.unit_change_check_box.isChecked():
-        #    if self.mesh.units == "mm":
-        #        self.mesh.change_units(0.001, "m")
-        #    elif self.mesh.units == "m":
-        #        self.mesh.change_units(1000, "mm")
+        if self.unit_change_check_box.isChecked():
+            if self.mesh.units == "mm":
+                self.mesh.change_units(0.001, "m")
+            elif self.mesh.units == "m":
+                self.mesh.change_units(1000, "mm")
 
         if self.convert_to_stl.isChecked():
             self.mesh.write_stl()

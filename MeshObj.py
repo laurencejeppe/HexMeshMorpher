@@ -303,7 +303,6 @@ class STLMesh(Mesh):
         return centroid, difference, maximums, minimums
 
 
-
 class INPMesh(Mesh):
     """
     Class for reading, getting and editing the array of nodes and then
@@ -313,9 +312,6 @@ class INPMesh(Mesh):
         Mesh.__init__(self, name=name, f_name=f_name, f_type='inp', f_folder=f_folder, description=description)
         # Set stl path
         self.stl_path = self.path(file_type='stl')
-
-        # Liner dimensions
-        # self.dimensions = self.get_liner_dimensions()
 
         # NPY
         self.elements = None
@@ -374,8 +370,8 @@ class INPMesh(Mesh):
         else:
             self._inp_tail = data_list[elem_end:]
 
-        x1 = np.max(self.nodes[:,0]) # TODO: Don't fix this
-        x2 = np.min(self.nodes[:,0])
+        x1 = np.max(self.nodes[:,1])
+        x2 = np.min(self.nodes[:,1])
         if abs(x1 - x2) > 1:
             self.units = "mm"
         else:
