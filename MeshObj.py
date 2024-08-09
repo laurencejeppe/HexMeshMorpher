@@ -83,7 +83,8 @@ def scaling_matrix(scale):
 
 class STLMesh(Mesh):
     """Class for defining file names and locations where they are saved"""
-    def __init__(self, name: str, f_name: str, f_folder: str, description: str=None, load: bool=True) -> None:
+    def __init__(self, name: str, f_name: str, f_folder: str,
+                 description: str=None, load: bool=True) -> None:
         Mesh.__init__(self, name, f_name, 'stl', f_folder, description)
 
         self.trimesh = None
@@ -91,8 +92,11 @@ class STLMesh(Mesh):
         if load:
             self.load_stl()
 
-        # TODO: Potentially a better idea to not have so many landmark points, but instead have a few, then transform all the rim nodes to the same value. 
-        # This is specifically for the liner meshes and won't help with the collar meshes.
+        # TODO: Potentially a better idea to not have so many landmark points,
+        # but instead have a few, then transform all the rim nodes to the same
+        # value. 
+        # This is specifically for the liner meshes and won't help with the
+        # collar meshes.
 
     def load_stl(self) -> None:
         """Loads STL file as trimesh object."""
@@ -187,7 +191,7 @@ class STLMesh(Mesh):
     def get_boundary_nodes(self) -> dict:
         """Take a trimesh object as input and returns the coordinates of all the
         nodes that are on a boundary of the mesh. It is therefore importent to
-        make sure that your mesh does not have any wholes that you don't want to
+        make sure that your mesh does not have any holes that you don't want to
         be included."""
         assert not self.trimesh.is_watertight, \
             "This mesh has no holes, so rim cannot be found."
@@ -197,6 +201,9 @@ class STLMesh(Mesh):
                 f"\n\tMesh contains {1-self.trimesh.euler_number} holes."
         unique_edges = self.trimesh.edges[tr.grouping.group_rows(self.trimesh.edges_sorted, require_count=1)]
 
+        # TODO: Potentially redo this to standardise the way in which all the
+        # boundary nodes are stored in the Mesh Object. Determine what the
+        # most useful form is. I don't think it is this.
         boundary_nodes = {}
         boundary_nodes['indices'] = np.unique(unique_edges.flatten())
         boundary_nodes['coords'] = self.trimesh.vertices[np.unique(unique_edges.flatten())]
@@ -261,7 +268,7 @@ class STLMesh(Mesh):
         new_boundary_nodes['coords'] = new_coords
         #new_coords = np.delete(new_coords, 0, 0) # Not sure why we did this.
         return new_boundary_nodes
-    
+
     def resample_boundary_nodes(self, num_nodes):
         """
         Interpolates the points around a polygon.
@@ -284,15 +291,15 @@ class STLMesh(Mesh):
         ]
         boundary_nodes['coords'] = interp
         return boundary_nodes
-    
+
     def change_units(self, factor, units):
         self.trimesh.apply_scale(factor)
         self.units = units
 
     def get_bounding_box(self) -> list:
-        maximums = [coord for coord in self.nodes[0, 1:]]
-        minimums = [coord for coord in self.nodes[0, 1:]]
-        for node in self.nodes:
+        maximums = [coord for coord in self.trimesh.vertices[0]]
+        minimums = [coord for coord in self.trimesh.vertices[0]]
+        for node in self.trimesh.vertices:
             for i, coord in enumerate(node[1:]):
                 if coord > maximums[i]:
                     maximums[i] = coord
@@ -309,7 +316,8 @@ class INPMesh(Mesh):
     saving the editted inp file with those edits.
     """
     def __init__(self, name: str, f_name: str, f_folder: str, description: str=None):
-        Mesh.__init__(self, name=name, f_name=f_name, f_type='inp', f_folder=f_folder, description=description)
+        Mesh.__init__(self, name=name, f_name=f_name, f_type='inp',
+                      f_folder=f_folder, description=description)
         # Set stl path
         self.stl_path = self.path(file_type='stl')
 
@@ -336,7 +344,8 @@ class INPMesh(Mesh):
             data_list = file.readlines()
         try:
             [indexes, instances] = self.find_index(data_list, '*Part,')
-            assert len(indexes) == 1, f'Can only process inp files with one part, {len(indexes)} were given.'
+            assert len(indexes) == 1, \
+                f'Can only process inp files with one part, {len(indexes)} were given.'
             part_index = indexes[0]
             self.part_head = instances[0].strip()
             self.part_name = instances[0].split('=')[-1].strip()
@@ -344,7 +353,8 @@ class INPMesh(Mesh):
             print("No *PART found, contining without parts")
 
         [n_indexes, n_insts] = self.find_index(data_list, '*Node')
-        assert len(n_indexes) == 1, f'Can only process inp files with one node section, {len(n_indexes)} are given.'
+        assert len(n_indexes) == 1, \
+            f'Can only process inp files with one node section, {len(n_indexes)} are given.'
         node_index = n_indexes[0]
 
         self._inp_head = data_list[:node_index]
@@ -364,7 +374,7 @@ class INPMesh(Mesh):
 
         self.elements \
             = np.array([[int(item.strip()) for item in line.split(',')] for line in elem_list])
-        
+
         if len(data_list) == elem_end:
             self._inp_tail = ""
         else:
@@ -471,31 +481,12 @@ class INPMesh(Mesh):
         unit_normal_vector = normal_vector / magnitude
         return unit_normal_vector
 
-    def get_liner_dimensions(self):
-        """Reads the Variabls.txt file that create_liner.py creates to store
-        the important variables relating to the dimensions and type of mesh
-        that we have created in ABAQUS."""
-        with open(os.path.join(self.f_folder, 'Dimensions.txt'), encoding="utf-8") as file:
-            lines = file.readlines()
-        dimensions = {}
-        for line in lines:
-            dimensions[line.split('=')[0].strip()] = float(line.split('=')[1].strip().split()[0])
-        return dimensions
-
     def get_boundary_nodes(self) -> None:
         """Gets the indices and coordinates of the liner rim nodes and the
         number of them saving them in self.boundary_nodes and self.num_boundary_nodes."""
-        # Y value of the rim of the liner
-        liner_rim = self.dimensions['Length'] - (self.dimensions['Diameter']/2)
-
-        # Get the indices of the nodes with a y value of liner_rim
-        indices = np.transpose(np.argwhere(self.nodes[:,2] == float(liner_rim)))[0]
-
-        # Use the index to get all the nodes with a y value of liner_rim
-        self.boundary_nodes = self.nodes[indices]
-
-        # Get the number of rim nodes
-        self.num_boundary_nodes = len(indices)
+        # TODO: Redo this to get all the rim nodes and save in boundary_nodes
+        # and num_boundary_nodes. Standardise this which the stl mesh
+        # boundary nodes.
 
     def apply_transformation(self, transformation_matrix):
         for i, node in enumerate(self.nodes):
@@ -541,7 +532,8 @@ def cut_meshes(meshes: list[STLMesh],
 
 class ParsingError(Exception):
     def __init__(self, keyword, message=None):
-        self.message = f"File parsing has failed keyword not found.\n\n{keyword} was not found in the file.\n"
+        self.message = \
+            f"File parsing has failed keyword not found.\n\n{keyword} was not found in the file.\n"
         if message:
             self.message += f"\n{message}\n"
         super().__init__(self.message)

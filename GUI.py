@@ -47,16 +47,22 @@ class MeshMorpherGUI(QMainWindow):
         self.layout.addWidget(self.file_manager)
 
         self.options_layout = QVBoxLayout()
-        self.open_tri_btn = QPushButton("Open STL Mesh")
-        self.open_tri_btn.clicked.connect(self.load_stl_mesh)
-        self.options_layout.addWidget(self.open_tri_btn)
-        self.open_inp_btn = QPushButton("Open INP Mesh")
-        self.open_inp_btn.clicked.connect(self.load_inp_mesh)
-        self.options_layout.addWidget(self.open_inp_btn)
-        self.change_mesh_units_btn = QPushButton("Change Selected Mesh Units")
+        self.open_mesh_btn = QPushButton("Open Mesh")
+        self.open_mesh_btn.clicked.connect(self.load_stl_mesh)
+        self.options_layout.addWidget(self.open_mesh_btn)
+        self.save_mesh_btn = QPushButton("Save Mesh")
+        self.save_mesh_btn.clicked.connect(self.save_meshes)
+        self.options_layout.addWidget(self.save_mesh_btn)
+        self.delete_mesh_btn = QPushButton("Delete Mesh")
+        self.delete_mesh_btn.clicked.connect(self.delete_mesh)
+        self.options_layout.addWidget(self.delete_mesh_btn)
+        self.change_mesh_units_btn = QPushButton("Change Mesh Units")
         self.change_mesh_units_btn.clicked.connect(self.change_mesh_units)
         self.options_layout.addWidget(self.change_mesh_units_btn)
-        
+        self.find_landmarks_btn = QPushButton("Find Landmarks")
+        self.find_landmarks_btn.clicked.connect(self.find_landmarks)
+        self.options_layout.addWidget(self.find_landmarks_btn)
+
         self.options_layout.addStretch()
         self.layout.addLayout(self.options_layout)
 
@@ -123,8 +129,8 @@ class MeshMorpherGUI(QMainWindow):
                                             filter=type_filter)
 
         if fname[0] == '':
-            show_message("Error loading mesh!")
-            return
+            show_message("Mesh has not been saved!", title="Mesh Save Error")
+            return None
         return fname[0]
 
     def choose_WDIR(self):
@@ -147,26 +153,29 @@ class MeshMorpherGUI(QMainWindow):
             item = self.file_manager.table.item(row, 0).text()
             item_type = self.file_manager.table.item(row, 1).text()
             f_path = self.chooseSaveFile(file_type_dict[item_type])
+            if not f_path:
+                return
             self.files[item].save_mesh(file_path=f_path)
             
-
-    
-    def load_mesh_dialog(self, stl=True, inp=True):
+    def load_mesh_dialog(self, stl=False, inp=False):
         stl_string = "MESH (*.stl)"
         inp_string = "ABAQUS (*.inp)"
-        if not stl:
-            typestring = inp_string
-        elif not inp:
-            typestring = stl_string
-        else:
+        typestring_list = []
+        if not stl and not inp:
             typestring = inp_string + ';; ' + stl_string
-        
+        else:
+            if inp:
+                typestring_list.append(inp_string)
+            if stl:
+                typestring_list.append(stl_string)
+            ';; '.join(typestring_list)
+
         fname = self.chooseOpenFile(typestring)
-        
+
         if not fname:
             show_message("Mesh selection has failed")
             return
-        
+
         file_path = fname
         file_folder_list = file_path[:-4].split('/')[:-1]
         file_folder_list[0] = file_folder_list[0] + '/'
@@ -182,11 +191,17 @@ class MeshMorpherGUI(QMainWindow):
             return
 
         self.open_mesh_dialog = Mesh_Options_Dialog(mesh, self)
-        self.open_mesh_dialog.accepted.connect(self.load_mesh)
+        self.open_mesh_dialog.accepted.connect(self.add_mesh_to_file_manager)
         self.open_mesh_dialog.exec()
 
-    def load_mesh(self):
+    def add_mesh_to_file_manager(self):
         mesh = self.open_mesh_dialog.retrieve_mesh_obj()
+        mesh_name = mesh.f_name
+        number = 0
+        while mesh_name in self.files:
+            number += 1
+            mesh_name = mesh.f_name + f"-{number}"
+        mesh.rename(mesh_name)
         self.files[mesh.f_name] = mesh
         mesh_obj = self.files[mesh.f_name]
         self.file_manager.addRow(mesh.f_name, mesh_obj)
@@ -219,6 +234,20 @@ class MeshMorpherGUI(QMainWindow):
             factor = 1000 if units == "m" else 0.001
             self.files[item].change_units(factor, units)
             self.file_manager.table.item(row, 3).setText(units)
+
+    def delete_mesh(self):
+        if not self.file_manager.table.selectedItems():
+            show_message(message="Please select a mesh in the table to delete!",
+                         title="Item Selection Error")
+        rows = []
+        for item in self.file_manager.table.selectedItems():
+            rows.append(self.file_manager.table.row(item))
+        rows = set(rows)
+        for row in rows:
+            item = self.file_manager.table.item(row, 0).text()
+            self.files.pop(item)
+            self.filesDrop.pop(row)
+            self.file_manager.deleteRow(row)
         
     def run_amberg_mapping(self):
         self.amberg_nricp = Amberg_Mapping(self)
@@ -229,6 +258,8 @@ class MeshMorpherGUI(QMainWindow):
         self.rbf_morpher.show()
 
     def find_landmarks(self):
+        # TODO: Do some checks here to see if the mesh you are trying to find
+        # landmarks on is appropriate.
         self.landmark_finder = landmarkFinder(self)
         self.landmark_finder.show()
 
@@ -236,7 +267,7 @@ class MeshMorpherGUI(QMainWindow):
 class Mesh_Options_Dialog(QDialog):
     def __init__(self, mesh:MeshObj.Mesh, parent = None):
         super(Mesh_Options_Dialog, self).__init__(parent)
-        
+
         self.mesh = mesh
 
         self.main_layout = QVBoxLayout()
@@ -260,14 +291,12 @@ class Mesh_Options_Dialog(QDialog):
 
         self.unit_change_check_box = QCheckBox()
         if self.mesh.units == "mm":
-            print(self.mesh.units)
             checkbox_string = "Convert mm to m"
         elif self.mesh.units == "m":
             checkbox_string = "Convert m to mm"
         self.unit_change_check_box.setText(checkbox_string)
         self.main_layout.addWidget(self.unit_change_check_box)
 
-        
         self.convert_to_stl = QCheckBox()
         self.convert_to_stl.setText("Convert to STL")
         if mesh.f_type == "inp":
@@ -303,13 +332,12 @@ class Mesh_Options_Dialog(QDialog):
 
         return self.mesh
 
-
 class Amberg_Mapping(QMainWindow):
     def __init__(self, parent = None):
         super(Amberg_Mapping, self).__init__(parent)
         self.setWindowTitle("Amberg Mapping")
-        self.mainWidget = QWidget()
-        self.setCentralWidget(self.mainWidget)
+        self.main_widget = QWidget()
+        self.setCentralWidget(self.main_widget)
         self.parent = parent
         self.files = parent.files
         self.WDIR = parent.WDIR
@@ -394,13 +422,14 @@ class Amberg_Mapping(QMainWindow):
         self.run_amberg_btn = QPushButton("Run Amberg Mapping")
         self.run_amberg_btn.clicked.connect(self.initiate_amberg)
         self.layout.addWidget(self.run_amberg_btn, 2, 0)
-        
-        # TODO: Refactor this, and add to actual layout, potentiall a pop up window would be better
+
+        # TODO: Have this as a pop up window that prevents you from doing
+        # other things while the amberg mapping is taking place.
         self.progressBar = QProgressBar(self)
         self.progressBar.setRange(0,1)
-        self.layout.addWidget(self.progressBar)
+        self.layout.addWidget(self.progressBar, 3, 0)
 
-        self.mainWidget.setLayout(self.layout)
+        self.main_widget.setLayout(self.layout)
 
         self.resize(530,450)
 
@@ -419,8 +448,10 @@ class Amberg_Mapping(QMainWindow):
 
     def set_step_table_sizing(self):
         self.table.resizeColumnsToContents()
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader() \
+            .setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader() \
+            .setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
@@ -450,8 +481,16 @@ class Amberg_Mapping(QMainWindow):
         target = self.files[self.target.currentText()]
         assert source.units == target.units, "The source and target must have the same units!"
         description = f"Mapping from {self.source.currentText()} to {self.target.currentText()}"
-        output = MeshObj.STLMesh('MappedMesh',
-                                 'MappedMesh',
+
+        base_name = 'MappedMesh'
+        output_name = base_name
+        number = 0
+        while output_name in self.parent.files:
+            number += 1
+            output_name = base_name + f'-{number}'
+
+        output = MeshObj.STLMesh(output_name,
+                                 output_name,
                                  f_folder=self.WDIR,
                                  description=description,
                                  load=False)
@@ -477,25 +516,14 @@ class Amberg_Mapping(QMainWindow):
             'use_landmarks':l,
         }
 
-        print(f"Input option use landmark pairs: {options['use_landmarks']}")
-
-        thread = True # TODO: Threading actually does work you numpty
-
-        if thread:
-            self.thread = AmbergThread(source=source,
-                                       target=target,
-                                       output=output,
-                                       steps=steps,
-                                       options=options,
-                                       callback=self.handle_result)
-            self.thread.start()
-        else:
-            AM = amberg_mapping.AmbergMapping(sourcey=source,
-                                              targety=target,
-                                              mappedy=output,
-                                              steps=steps,
-                                              options=options)
-            self.handle_result(AM)
+        self.thread = AmbergThread(source=source,
+                                   target=target,
+                                   output=output,
+                                   steps=steps,
+                                   options=options,
+                                   callback=self.handle_result)
+        self.progressBar.setRange(0,0)
+        self.thread.start()
 
     def handle_result(self, result:amberg_mapping.AmbergMapping):
         self.progressBar.setRange(0,1)
@@ -504,10 +532,6 @@ class Amberg_Mapping(QMainWindow):
         self.parent.file_manager.addRow(output_mesh.f_name, output_mesh)
         self.parent.filesDrop.append(output_mesh.f_name)
         self.close()
-    
-    def onStart(self):
-        self.progressBar.setRange(0,0)
-        self.myLongTask.start()
 
 class AmbergThread(QThread):
     taskFinished = pyqtSignal(object)
@@ -526,7 +550,11 @@ class AmbergThread(QThread):
                   [200, [-0.0636008, -0.0421502, 0.0119019]], # Top Right
                   [10101, [0.0461566, -0.113105, -0.00230067]], # Bottom Left
                   [10200, [-0.0484762, -0.113245, -0.00233835]]] # Bottom Right
-        print(lpairs)
+
+        lpairs = [[1, [0.0625774, 0.037793, 0.111964]],
+                  [200, [-0.0636172, 0.0377307, 0.111834]],
+                  [10101, [0.0461407, -0.0332396, 0.0977013]],
+                  [10200, [-0.0484672, -0.0332104, 0.0976772]]]
 
         AM = amberg_mapping.AmbergMapping(sourcey=self.source,
                                           targety=self.target,
@@ -593,24 +621,56 @@ class RBF_Morpher(QMainWindow):
         self.close()
 
 class landmarkFinder(QMainWindow):
-    def __init__(self, parent = None):
+    """ A class of QMainWindow that handles the automatic detection of
+    boundary nodes in a mesh that could be used as langmark nodes in the
+    amberg morphing algorithm. """
+    def __init__(self, mesh:MeshObj.STLMesh, parent = None):
         super(landmarkFinder, self).__init__(parent)
         self.setWindowTitle("Landmark Finder")
-        self.mainWidget = QWidget()
-        self.setCentralWidget(self.mainWidget)
+        self.main_widget = QWidget()
+        self.setCentralWidget(self.main_widget)
         self.parent = parent
+
+        self.mesh = mesh
+        self.boundary_nodes = None
+
+        self.main_layout = QVBoxLayout()
+        self.mesh_name_label = QLabel(self.mesh.f_name)
+        self.main_layout.addWidget(self.mesh_name_label)
+        self.detected_boundary_btn = QPushButton("Detect Boundary Nodes")
+        self.detected_boundary_btn.clicked.connect(self.detect_boundary_nodes)
+
+
+
+        self.main_widget.setLayout(self.main_layout)
+
+        # TODO: Add a signal for sending the edits that have been made to the
+        # mesh back to the main window.
+
+    def is_mesh_watertight(self):
+        """ Returns a boolean if the mesh is watertight or not. """
+
+    def automatic_mesh_corner_detection(self, mesh:MeshObj.STLMesh):
+        """
+        Returns an array of node numbers and coordinates of any corner
+        nodes that have been detected. Corner nodes are external boundary
+        nodes where the angle is below a certain range. 
+        """
+
+    def detect_boundary_nodes(self):
+        """
+        Returns an array of node numbers and coordinates of any nodes
+        that lie on a boundary. This should also be seperated to between
+        corner nodes.
+        """
+        self.boundary_nodes = self.mesh.get_boundary_nodes()
+        # TODO: Edit the meshObj.STLMesh such that the boundary nodes are
+        # saved within the object.
 
 
 class fileManager(QWidget):
     """
-    Controls to manage the displayed 
-    
-    Example
-    -------
-    Perhaps an example implementation:
-
-    >>> from GUIs.ampscanGUI import ampscanGUI
-
+    Controls to manage the displayed files.
     """
     def __init__(self, parent = None):
         super(fileManager, self).__init__(parent)
@@ -624,9 +684,12 @@ class fileManager(QWidget):
         self.n = self.table.rowCount()
         #self.table.verticalHeader().hide()
         self.table.resizeColumnsToContents()
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader() \
+            .setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader() \
+            .setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader() \
+            .setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.table.horizontalHeader().setSectionsClickable(False)
@@ -642,24 +705,25 @@ class fileManager(QWidget):
     def addRow(self, name, amp):
         self.table.insertRow(self.n)
         name_item = QTableWidgetItem(name)
+        name_item.setFlags(name_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         self.table.setItem(self.n, 0, name_item)
         f_type_item = QTableWidgetItem(amp.f_type)
+        f_type_item.setFlags(f_type_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         f_type_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self.table.setItem(self.n, 1, f_type_item)
         description_item = QTableWidgetItem(amp.description)
+        description_item.setFlags(description_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         self.table.setItem(self.n, 2, description_item)
         units_item = QTableWidgetItem(amp.units)
+        units_item.setFlags(units_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         units_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self.table.setItem(self.n, 3, units_item)
-        
+
         self.n = self.table.rowCount()
 
-    def getRow(self, i):
-        row = []
-        for r in range(self.table.columnCount() - 1):
-            row.append(self.table.item(i, r).text())
-        row.append(self.table.item(i, r+1).checkState())
-        return row
+    def deleteRow(self, row):
+        self.table.removeRow(row)
+        self.n = self.table.rowCount()
 
 def show_message(message, message_type="err", title="An Error Occured..."):
     """
@@ -671,12 +735,6 @@ def show_message(message, message_type="err", title="An Error Occured..."):
         The type of message e.g. "err" or "info"
     title : string
         The title of the dialog window
-
-    Examples
-    --------
-    >>> show_message("test")
-    >>> show_message("test2", "info", "test")
-
     """
     dialog = QMessageBox()
     dialog.setText(message)
