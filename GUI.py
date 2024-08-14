@@ -258,9 +258,26 @@ class MeshMorpherGUI(QMainWindow):
         self.rbf_morpher.show()
 
     def find_landmarks(self):
-        # TODO: Do some checks here to see if the mesh you are trying to find
-        # landmarks on is appropriate.
-        self.landmark_finder = landmarkFinder(self)
+        if not self.file_manager.table.selectedItems():
+            show_message(message="Please select a mesh in the table to add landmarks to!",
+                         title="Item Selection Error")
+            return
+        rows = []
+        for item in self.file_manager.table.selectedItems():
+            rows.append(self.file_manager.table.row(item))
+        print(rows)
+        rows = set(rows)
+        if len(rows) > 1:
+            show_message(message="Please only select one mesh to find landmarks!")
+            return
+        for row in rows:
+            mesh_name = self.file_manager.table.item(row, 0).text()
+        mesh = self.files[mesh_name]
+        if not isinstance(mesh, MeshObj.STLMesh):
+            show_message(message="Landmark finder is currently only supported \
+                         for STL meshes!", title="Item Selection Error")
+            return
+        self.landmark_finder = landmarkFinder(mesh=mesh, parent=self)
         self.landmark_finder.show()
 
 
@@ -593,7 +610,6 @@ class RBF_Morpher(QMainWindow):
         self.morphee = QComboBox()
         self.morphee.addItems(self.parent.files)
         self.main_layout.addWidget(self.morphee)
-        
 
         self.run_morph_btn = QPushButton("Run Amberg Mapping")
         self.run_morph_btn.clicked.connect(self.initiate_morph)
@@ -637,9 +653,9 @@ class landmarkFinder(QMainWindow):
         self.main_layout = QVBoxLayout()
         self.mesh_name_label = QLabel(self.mesh.f_name)
         self.main_layout.addWidget(self.mesh_name_label)
-        self.detected_boundary_btn = QPushButton("Detect Boundary Nodes")
-        self.detected_boundary_btn.clicked.connect(self.detect_boundary_nodes)
-
+        self.detect_boundary_btn = QPushButton("Detect Boundary Nodes")
+        self.detect_boundary_btn.clicked.connect(self.detect_boundary_nodes)
+        self.main_layout.addWidget(self.detect_boundary_btn)
 
 
         self.main_widget.setLayout(self.main_layout)
@@ -664,8 +680,19 @@ class landmarkFinder(QMainWindow):
         corner nodes.
         """
         self.boundary_nodes = self.mesh.get_boundary_nodes()
+        print(self.boundary_nodes)
         # TODO: Edit the meshObj.STLMesh such that the boundary nodes are
         # saved within the object.
+
+
+class progressBar(QMainWindow):
+    def __init__(self, parent = None) -> None:
+        super(progressBar).__init__(parent)
+        # TODO: Set this up to be a pop up window that comes up when the
+        # amberg or RBF morphers are running the program to prevent the user
+        # from doing anything else with the application.
+        pass
+
 
 
 class fileManager(QWidget):
