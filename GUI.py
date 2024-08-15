@@ -248,7 +248,7 @@ class MeshMorpherGUI(QMainWindow):
             self.files.pop(item)
             self.filesDrop.pop(row)
             self.file_manager.deleteRow(row)
-        
+
     def run_amberg_mapping(self):
         self.amberg_nricp = Amberg_Mapping(self)
         self.amberg_nricp.show()
@@ -265,7 +265,6 @@ class MeshMorpherGUI(QMainWindow):
         rows = []
         for item in self.file_manager.table.selectedItems():
             rows.append(self.file_manager.table.row(item))
-        print(rows)
         rows = set(rows)
         if len(rows) > 1:
             show_message(message="Please only select one mesh to find landmarks!")
@@ -650,12 +649,23 @@ class landmarkFinder(QMainWindow):
         self.mesh = mesh
         self.boundary_nodes = None
 
-        self.main_layout = QVBoxLayout()
+        self.main_layout = QGridLayout()
         self.mesh_name_label = QLabel(self.mesh.f_name)
-        self.main_layout.addWidget(self.mesh_name_label)
+        self.main_layout.addWidget(self.mesh_name_label, 0, 0)
+
+        self.info_box = QLabel("")
+        self.info_box.setWordWrap(True)
+        self.main_layout.addWidget(self.info_box, 1, 0)
+
+        self.button_layout = QVBoxLayout()
         self.detect_boundary_btn = QPushButton("Detect Boundary Nodes")
         self.detect_boundary_btn.clicked.connect(self.detect_boundary_nodes)
-        self.main_layout.addWidget(self.detect_boundary_btn)
+        self.button_layout.addWidget(self.detect_boundary_btn)
+        self.find_corners_btn = QPushButton("Find Corners")
+        self.find_corners_btn.clicked.connect(self.detect_corner_nodes)
+        self.button_layout.addWidget(self.find_corners_btn)
+
+        self.main_layout.addLayout(self.button_layout, 1, 1)
 
 
         self.main_widget.setLayout(self.main_layout)
@@ -680,9 +690,69 @@ class landmarkFinder(QMainWindow):
         corner nodes.
         """
         self.boundary_nodes = self.mesh.get_boundary_nodes()
-        print(self.boundary_nodes)
+        num_nodes = len(self.boundary_nodes['indices'])
+        self.update_info_box(f"Detected {str(num_nodes)} boundary nodes!")
         # TODO: Edit the meshObj.STLMesh such that the boundary nodes are
         # saved within the object.
+
+    def detect_corner_nodes(self):
+        """
+        Returns an array of node numbers and coordinates of any nodes
+        that lie on a boundary and are on the corner. Where a corner is
+        defined as having an angle of 100 or less with neighbouring
+        boundary nodes.
+        """
+        # TODO: This process needs to be updated. It takes too long. I think
+        # you can improve by first creating a sublist of all the faces that
+        # are on the boundary. Once you have this you do not need to check
+        # through the whole array of faces to see if there are matching nodes.
+        self.detect_boundary_nodes()
+        node = self.boundary_nodes['indices'][0]
+        nodes = set(self.boundary_nodes['indices'])
+        while len(nodes) > 0:
+            #print(f"Node = {node}")
+            neighbouring_nodes = self.check_neighbours(node, nodes)
+
+            #print(f"Set of Nodes = {neighbouring_nodes}")
+            neighbouring_nodes.remove(node)
+            #print(f"{node} removed from set to give: {neighbouring_nodes}")
+
+            nodes.remove(node)
+            if len(nodes) == len(self.boundary_nodes['indices']) - 1:
+                neighbouring_nodes.pop()
+            if len(neighbouring_nodes) > 1:
+                for _node in neighbouring_nodes:
+                    n_nodes = self.check_neighbours(_node, nodes)
+                    if n_nodes.issubset(neighbouring_nodes):
+                        node = _node
+                        break
+            else:
+                for item in neighbouring_nodes:
+                    node = item
+
+        # Update info box
+        self.update_info_box("Corner detection process has been completed!")
+
+    def check_neighbours(self, node, nodes):
+        neighbouring_nodes = set()
+        for face in self.mesh.trimesh.faces:
+            if node in face:
+                for n in face:
+                    if n in nodes:
+                        neighbouring_nodes.add(n)
+        return neighbouring_nodes
+
+    def calculate_angle(self, nodes):
+        """
+        Function for calculating the angle between three nodes.
+        """
+        # TODO: Write what needs to be done to calculate the angle between
+        # three given nodes to determine if the node is a corner.
+
+    def update_info_box(self, new_text):
+        info_box_text = self.info_box.text()
+        info_box_text += (new_text + '\n')
+        self.info_box.setText(info_box_text)
 
 
 class progressBar(QMainWindow):
