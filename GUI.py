@@ -16,9 +16,11 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QHeaderView, QDoubleSpinBox, QSpinBox,
                              QAbstractSpinBox, QStyle, QDialog, QProgressBar,
                              QTextEdit, QDialogButtonBox)
+import numpy as np
 import MeshObj
 import amberg_mapping
 import RBF_morpher
+
 
 class MeshMorpherGUI(QMainWindow):
     def __init__(self):
@@ -638,7 +640,10 @@ class RBF_Morpher(QMainWindow):
 class landmarkFinder(QMainWindow):
     """ A class of QMainWindow that handles the automatic detection of
     boundary nodes in a mesh that could be used as langmark nodes in the
-    amberg morphing algorithm. """
+    amberg morphing algorithm. 
+    
+    The algorithms for this should potentially be within the MeshObj class.
+    """
     def __init__(self, mesh:MeshObj.STLMesh, parent = None):
         super(landmarkFinder, self).__init__(parent)
         self.setWindowTitle("Landmark Finder")
@@ -710,17 +715,18 @@ class landmarkFinder(QMainWindow):
         node = self.boundary_nodes['indices'][0]
         nodes = set(self.boundary_nodes['indices'])
         while len(nodes) > 0:
-            #print(f"Node = {node}")
+            # Check which nodes are neighbours and create a set
             neighbouring_nodes = self.check_neighbours(node, nodes)
 
-            #print(f"Set of Nodes = {neighbouring_nodes}")
+            # Removes the current node from the set of neighbouring nodes.
             neighbouring_nodes.remove(node)
-            #print(f"{node} removed from set to give: {neighbouring_nodes}")
 
-            nodes.remove(node)
-            if len(nodes) == len(self.boundary_nodes['indices']) - 1:
+            nodes.remove(node) # Remove current node from the list of nodes in the search.
+            if len(nodes) == len(self.boundary_nodes['indices']) - 1: # Is this the first node and therefore more than one node could be used
                 neighbouring_nodes.pop()
             if len(neighbouring_nodes) > 1:
+                # If there are more than one node left we have a situation where a triangle lies completely on the edge
+                # so we need to find which of the nodes should be used nexted. (The one which has all of its nodes in common with the previous node).
                 for _node in neighbouring_nodes:
                     n_nodes = self.check_neighbours(_node, nodes)
                     if n_nodes.issubset(neighbouring_nodes):
@@ -734,6 +740,9 @@ class landmarkFinder(QMainWindow):
         self.update_info_box("Corner detection process has been completed!")
 
     def check_neighbours(self, node, nodes):
+        """
+        Creates a set of nodes that are present in nodes that share a face with the node \"node\".
+        """
         neighbouring_nodes = set()
         for face in self.mesh.trimesh.faces:
             if node in face:
@@ -745,11 +754,25 @@ class landmarkFinder(QMainWindow):
     def calculate_angle(self, nodes):
         """
         Function for calculating the angle between three nodes.
+        nodes:
+            iterable of nodes with coordinates [[x1, y1, z1], [x2, y2, z2], [x3, y3, z3]]
+            where the angle 1-2-3 is then found.
         """
-        # TODO: Write what needs to be done to calculate the angle between
-        # three given nodes to determine if the node is a corner.
+        v1 = [a_i - b_i for a_i, b_i in zip(nodes[0], nodes[1])]
+        v2 = [a_i - b_i for a_i, b_i in zip(nodes[2], nodes[1])]
+        dot = np.dot(v1, v2)
+        v1_mag = np.linalg.norm(v1)
+        v2_mag = np.linalg.norm(v2)
+        angle = np.arccos(dot/(v1_mag*v2_mag))
+        return angle
+
 
     def update_info_box(self, new_text):
+        """ Adds a String to the info box to give a message about function completion to the user.
+
+        Args:
+            new_text (String): Message to be added to the info box display
+        """
         info_box_text = self.info_box.text()
         info_box_text += (new_text + '\n')
         self.info_box.setText(info_box_text)
