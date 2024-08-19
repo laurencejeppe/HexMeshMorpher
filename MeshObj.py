@@ -10,6 +10,7 @@ import fnmatch as fnm
 import numpy as np
 import trimesh as tr
 import pymeshlab as ml
+from dataclasses import dataclass
 
 FOLDER = 'Geometry'
 
@@ -25,7 +26,8 @@ class Mesh():
         self.num_nodes:int = None
         self.num_elements:int = None
         self.num_boundary_nodes:int = None
-        self.boundary_nodes = None
+        self.boundary_nodes: np.ndarray = None
+        self.boundary_faces: np.ndarray = None
         self.units:str = None
 
     def path(self, file_name: str=None, file_type: str=None):
@@ -94,7 +96,7 @@ class STLMesh(Mesh):
 
         # TODO: Potentially a better idea to not have so many landmark points,
         # but instead have a few, then transform all the rim nodes to the same
-        # value. 
+        # value.
         # This is specifically for the liner meshes and won't help with the
         # collar meshes.
 
@@ -188,7 +190,7 @@ class STLMesh(Mesh):
             ms.set_current_mesh(mesh_num)
             ms.save_current_mesh(self.path(self.f_name + '_cut'))
 
-    def get_boundary_nodes(self) -> dict:
+    def get_boundary_nodes(self) -> np.ndarray:
         """Take a trimesh object as input and returns the coordinates of all the
         nodes that are on a boundary of the mesh. It is therefore importent to
         make sure that your mesh does not have any holes that you don't want to
@@ -201,26 +203,30 @@ class STLMesh(Mesh):
                 f"\n\tMesh contains {1-self.trimesh.euler_number} holes."
         unique_edges = self.trimesh.edges[tr.grouping.group_rows(self.trimesh.edges_sorted, require_count=1)]
 
-        # TODO: Potentially redo this to standardise the way in which all the
-        # boundary nodes are stored in the Mesh Object. Determine what the
-        # most useful form is. I don't think it is this.
-        boundary_nodes = {}
-        boundary_nodes['indices'] = np.unique(unique_edges.flatten())
-        boundary_nodes['coords'] = self.trimesh.vertices[np.unique(unique_edges.flatten())]
+        boundary_node_indices = np.unique(unique_edges.flatten())
+        self.boundary_nodes = boundary_node_indices
+        return boundary_node_indices
 
-        self.num_boundary_nodes = len(boundary_nodes)
+    def get_boundary_faces(self):
+        self.get_boundary_nodes()
+        boundary_faces = []
+        for i, face in enumerate(self.trimesh.faces):
+            for item in face:
+                if item in self.boundary_nodes and i not in boundary_faces:
+                    boundary_faces.append(i)
+        self.boundary_faces = boundary_faces
+        return boundary_faces
 
-        return boundary_nodes
-    
-    def order_boundary_nodes(self) -> dict:
+    def order_boundary_nodes(self) -> np.ndarray:
         """
         Makes sure all the points in a polygon are consecutive around the polygon.
         """
+        # This can be rewritten with the new method I have found.
         if not self.boundary_nodes:
             self.boundary_nodes = self.get_boundary_nodes()
 
-        coords = self.boundary_nodes['coords']
-        indices = self.boundary_nodes['indices']
+        indices = self.boundary_nodes
+        coords = self.trimesh.vertices[self.boundary_nodes]
         # Creates new coords with same shape as the coords of node positions
         new_coords = np.zeros(shape=np.shape(coords))
         new_indices = np.zeros(shape=np.shape(indices))
@@ -263,10 +269,8 @@ class STLMesh(Mesh):
             coords = np.delete(coords, index, 0)
             indices = np.delete(indices, index, 0)
             i += 1
-        new_boundary_nodes = {}
-        new_boundary_nodes['indices'] = new_indices
-        new_boundary_nodes['coords'] = new_coords
-        #new_coords = np.delete(new_coords, 0, 0) # Not sure why we did this.
+        new_boundary_nodes = new_indices
+        self.boundary_nodes = new_boundary_nodes
         return new_boundary_nodes
 
     def resample_boundary_nodes(self, num_nodes):
@@ -274,7 +278,7 @@ class STLMesh(Mesh):
         Interpolates the points around a polygon.
         """
         boundary_nodes = self.order_boundary_nodes()
-        array = boundary_nodes['coords']
+        array = self.trimesh.vertices[self.boundary_nodes]
 
         # Cumulative Euclidean distance between successive polygon points.
         # This will be the "x" for interpolation
@@ -289,14 +293,16 @@ class STLMesh(Mesh):
             np.interp(d_sampled, d, array[:, 1]),
             np.interp(d_sampled, d, array[:, 2]),
         ]
-        boundary_nodes['coords'] = interp
+        boundary_nodes.coords = interp
         return boundary_nodes
 
     def change_units(self, factor, units):
+        """ Changes the units of a mesh by a given factor. """
         self.trimesh.apply_scale(factor)
         self.units = units
 
     def get_bounding_box(self) -> list:
+        """ Gets the xyz values of the centroid, range, maximum and minumum. """
         maximums = [coord for coord in self.trimesh.vertices[0]]
         minimums = [coord for coord in self.trimesh.vertices[0]]
         for node in self.trimesh.vertices:
@@ -393,7 +399,7 @@ class INPMesh(Mesh):
         self.units = units
 
     def find_elements(self, starting_index, data_list):
-        """Finds the number of elements in the inp file."""
+        """Finds the number of elements in the inp file. """
         index = starting_index
         elements = []
         more_elements = True
@@ -407,7 +413,7 @@ class INPMesh(Mesh):
         return elements, index-1
 
     def find_index(self, data_list, keyword_input):
-        """Finds the index if a keyword in a file list"""
+        """ Finds the index if a keyword in a file list. """
         wildcard = '*'
         instances = fnm.filter(data_list, keyword_input + wildcard)
         index = []
@@ -419,6 +425,7 @@ class INPMesh(Mesh):
             raise ParsingError(keyword_input, "Check that the input file is correctly written.")
 
     def save_mesh(self, file_path):
+        """ Saves the mesh as an inp mesh. """
         self.write_inp(file_path=file_path)
 
     def write_inp(self, file_name: str=None, file_path: str=None):
@@ -482,24 +489,25 @@ class INPMesh(Mesh):
         return unit_normal_vector
 
     def get_boundary_nodes(self) -> None:
-        """Gets the indices and coordinates of the liner rim nodes and the
-        number of them saving them in self.boundary_nodes and self.num_boundary_nodes."""
+        """ Gets the indices and coordinates of the liner rim nodes and the
+        number of them saving them in self.boundary_nodes and self.num_boundary_nodes. """
         # TODO: Redo this to get all the rim nodes and save in boundary_nodes
         # and num_boundary_nodes. Standardise this which the stl mesh
         # boundary nodes.
 
     def apply_transformation(self, transformation_matrix):
+        """ Applies a given transformation matrix to a mesh. """
         for i, node in enumerate(self.nodes):
             self.nodes[i][1:] = np.dot(transformation_matrix,np.append(node[1:],1))[:3]
 
     def save_boundary_nodes(self, file_name: str) -> None:
-        """Saves the indices and coordinates of the rim nodes in an npy file."""
+        """ Saves the indices and coordinates of the rim nodes in an npy file. """
         file_path = os.path.join(self.f_path, self.f_folder, file_name)
         self.boundary_nodes_path = file_path
         np.save(file_path, self.boundary_nodes)
 
     def get_bounding_box(self) -> list:
-        """ Somewhat redundent seeing as I have the units check in the load mesh."""
+        """ Somewhat redundent seeing as I have the units check in the load mesh. """
         maximums = [coord for coord in self.nodes[0, 1:]]
         minimums = [coord for coord in self.nodes[0, 1:]]
         for node in self.nodes:
@@ -531,6 +539,7 @@ def cut_meshes(meshes: list[STLMesh],
     return meshes
 
 class ParsingError(Exception):
+    """Errer message for reading data from inp or stl files."""
     def __init__(self, keyword, message=None):
         self.message = \
             f"File parsing has failed keyword not found.\n\n{keyword} was not found in the file.\n"

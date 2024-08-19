@@ -695,10 +695,8 @@ class landmarkFinder(QMainWindow):
         corner nodes.
         """
         self.boundary_nodes = self.mesh.get_boundary_nodes()
-        num_nodes = len(self.boundary_nodes['indices'])
+        num_nodes = len(self.boundary_nodes)
         self.update_info_box(f"Detected {str(num_nodes)} boundary nodes!")
-        # TODO: Edit the meshObj.STLMesh such that the boundary nodes are
-        # saved within the object.
 
     def detect_corner_nodes(self):
         """
@@ -707,13 +705,10 @@ class landmarkFinder(QMainWindow):
         defined as having an angle of 100 or less with neighbouring
         boundary nodes.
         """
-        # TODO: This process needs to be updated. It takes too long. I think
-        # you can improve by first creating a sublist of all the faces that
-        # are on the boundary. Once you have this you do not need to check
-        # through the whole array of faces to see if there are matching nodes.
         self.detect_boundary_nodes()
-        node = self.boundary_nodes['indices'][0]
-        nodes = set(self.boundary_nodes['indices'])
+        self.mesh.get_boundary_faces()
+        node = self.boundary_nodes[0]
+        nodes = set(self.boundary_nodes)
         while len(nodes) > 0:
             # Check which nodes are neighbours and create a set
             neighbouring_nodes = self.check_neighbours(node, nodes)
@@ -722,18 +717,24 @@ class landmarkFinder(QMainWindow):
             neighbouring_nodes.remove(node)
 
             nodes.remove(node) # Remove current node from the list of nodes in the search.
-            if len(nodes) == len(self.boundary_nodes['indices']) - 1: # Is this the first node and therefore more than one node could be used
+            # Is this the first node and therefore more than one node could be used
+            if len(nodes) == len(self.boundary_nodes) - 1:
                 neighbouring_nodes.pop()
             if len(neighbouring_nodes) > 1:
-                # If there are more than one node left we have a situation where a triangle lies completely on the edge
-                # so we need to find which of the nodes should be used nexted. (The one which has all of its nodes in common with the previous node).
+                # If there are more than one node left we have a situation where a triangle
+                # lies completely on the edge so we need to find which of the nodes should
+                # be used next. (The one which has all of its nodes in common with the
+                # previous node).
                 for _node in neighbouring_nodes:
                     n_nodes = self.check_neighbours(_node, nodes)
                     if n_nodes.issubset(neighbouring_nodes):
+                        angle = self.calculate_angle([,node, _node]) # TODO: Write this to inlcude a record of the previous node to access and calculate the angle from
+                        # or have a vector that is the previous two nodes that you then use to calucale the angle
                         node = _node
                         break
             else:
                 for item in neighbouring_nodes:
+                    angle = self.calculate_angle([,node, item])
                     node = item
 
         # Update info box
@@ -741,10 +742,10 @@ class landmarkFinder(QMainWindow):
 
     def check_neighbours(self, node, nodes):
         """
-        Creates a set of nodes that are present in nodes that share a face with the node \"node\".
+        Creates a set of nodes that are present in nodes that share a face with the node "node".
         """
         neighbouring_nodes = set()
-        for face in self.mesh.trimesh.faces:
+        for face in self.mesh.trimesh.faces[self.mesh.boundary_faces]:
             if node in face:
                 for n in face:
                     if n in nodes:
@@ -753,7 +754,7 @@ class landmarkFinder(QMainWindow):
 
     def calculate_angle(self, nodes):
         """
-        Function for calculating the angle between three nodes.
+        Calculates the angle between three nodes.
         nodes:
             iterable of nodes with coordinates [[x1, y1, z1], [x2, y2, z2], [x3, y3, z3]]
             where the angle 1-2-3 is then found.
@@ -765,7 +766,6 @@ class landmarkFinder(QMainWindow):
         v2_mag = np.linalg.norm(v2)
         angle = np.arccos(dot/(v1_mag*v2_mag))
         return angle
-
 
     def update_info_box(self, new_text):
         """ Adds a String to the info box to give a message about function completion to the user.
