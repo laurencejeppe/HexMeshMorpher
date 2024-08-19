@@ -708,6 +708,8 @@ class landmarkFinder(QMainWindow):
         self.detect_boundary_nodes()
         self.mesh.get_boundary_faces()
         node = self.boundary_nodes[0]
+        corners = []
+        previous = node
         nodes = set(self.boundary_nodes)
         while len(nodes) > 0:
             # Check which nodes are neighbours and create a set
@@ -719,7 +721,10 @@ class landmarkFinder(QMainWindow):
             nodes.remove(node) # Remove current node from the list of nodes in the search.
             # Is this the first node and therefore more than one node could be used
             if len(nodes) == len(self.boundary_nodes) - 1:
-                neighbouring_nodes.pop()
+                for i, n in enumerate(neighbouring_nodes):
+                    if i == 0:
+                        previous = n
+                neighbouring_nodes.remove(previous)
             if len(neighbouring_nodes) > 1:
                 # If there are more than one node left we have a situation where a triangle
                 # lies completely on the edge so we need to find which of the nodes should
@@ -728,17 +733,26 @@ class landmarkFinder(QMainWindow):
                 for _node in neighbouring_nodes:
                     n_nodes = self.check_neighbours(_node, nodes)
                     if n_nodes.issubset(neighbouring_nodes):
-                        angle = self.calculate_angle([,node, _node]) # TODO: Write this to inlcude a record of the previous node to access and calculate the angle from
-                        # or have a vector that is the previous two nodes that you then use to calucale the angle
+                        angle_rad = self.calculate_angle([self.mesh.trimesh.vertices[previous],
+                                                      self.mesh.trimesh.vertices[node],
+                                                      self.mesh.trimesh.vertices[_node]])
+                        if angle_rad <= 100.0*np.pi/180.0:
+                            corners.append(node)
+                        previous = node
                         node = _node
                         break
             else:
-                for item in neighbouring_nodes:
-                    angle = self.calculate_angle([,node, item])
-                    node = item
-
+                for _node in neighbouring_nodes:
+                    angle_rad = self.calculate_angle([self.mesh.trimesh.vertices[previous],
+                                                  self.mesh.trimesh.vertices[node],
+                                                  self.mesh.trimesh.vertices[_node]])
+                    if angle_rad <= 100.0*np.pi/180:
+                        corners.append(node)
+                    previous = node
+                    node = _node
+        print(corners)
         # Update info box
-        self.update_info_box("Corner detection process has been completed!")
+        self.update_info_box(f"Corner detection process has been completed!\n{len(corners)} corners were found!")
 
     def check_neighbours(self, node, nodes):
         """
