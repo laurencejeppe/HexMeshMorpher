@@ -14,9 +14,23 @@ from dataclasses import dataclass
 
 FOLDER = 'Geometry'
 
+@dataclass
+class Boundary():
+    """ Data class for holding information about the boundary of a mesh. """
+    nodes: np.ndarray = None
+    is_watertight: bool = None
+    edges: np.ndarray = None
+    edges_sorted: bool = False
+    faces: np.ndarray = None
+    num_nodes: int = None
+    corner_nodes: list = None
+    corner_node_angle_threshold: float = None
+
+
 class Mesh():
     """Class for containing all the information common between meshes"""
-    def __init__(self, name: str, f_name: str, f_type: str, f_folder: str, description: str='') -> None:
+    def __init__(self, name: str, f_name: str, f_type: str, f_folder: str,
+                 description: str='') -> None:
         self.name = name
         self.f_name = f_name
         self.description = description
@@ -28,6 +42,7 @@ class Mesh():
         self.num_boundary_nodes:int = None
         self.boundary_nodes: np.ndarray = None
         self.boundary_faces: np.ndarray = None
+        self.boundary: Boundary = Boundary()
         self.units:str = None
 
     def path(self, file_name: str=None, file_type: str=None):
@@ -190,7 +205,7 @@ class STLMesh(Mesh):
             ms.set_current_mesh(mesh_num)
             ms.save_current_mesh(self.path(self.f_name + '_cut'))
 
-    def get_boundary_nodes(self) -> np.ndarray:
+    def get_boundary(self) -> np.ndarray:
         """Take a trimesh object as input and returns the coordinates of all the
         nodes that are on a boundary of the mesh. It is therefore importent to
         make sure that your mesh does not have any holes that you don't want to
@@ -201,32 +216,99 @@ class STLMesh(Mesh):
             "The mesh has more than one openning so a unique rim cannot be found." \
                 f"\n\tEuler number = {self.trimesh.euler_number}" \
                 f"\n\tMesh contains {1-self.trimesh.euler_number} holes."
-        unique_edges = self.trimesh.edges[tr.grouping.group_rows(self.trimesh.edges_sorted, require_count=1)]
+        unique_edges = self.trimesh.edges[
+            tr.grouping.group_rows(self.trimesh.edges_sorted, require_count=1)
+        ]
 
-        boundary_node_indices = np.unique(unique_edges.flatten())
-        self.boundary_nodes = boundary_node_indices
-        return boundary_node_indices
+        self.boundary.edges = unique_edges
+        self.arrange_boundary_edges()
+        self.boundary.nodes = np.unique(unique_edges.flatten())
+        self.boundary.is_watertight = self.trimesh.is_watertight
+        self.boundary.num_nodes = len(self.boundary.nodes)
+        self.get_boundary_faces()
+        self.get_corners(angle_threshold=140.0)
+        return self.boundary.nodes
 
-    def get_boundary_faces(self):
-        self.get_boundary_nodes()
+    def arrange_boundary_edges(self) -> np.ndarray:
+        if not self.boundary.edges.any():
+            self.get_boundary()
+        boundary_edges = self.boundary.edges
+
+        unsorted_edges = [[item for item in row] for row in boundary_edges]
+        sorted_edges = np.zeros(np.shape(boundary_edges), dtype=np.uint32)
+
+        sorted_edges[0,:] = boundary_edges[0,:]
+        del unsorted_edges[0]
+        index = 1
+        while len(unsorted_edges) > 0:
+            for edge in unsorted_edges:
+                if sorted_edges[index-1,1] in edge:
+                    if edge[1] == sorted_edges[index-1,1]:
+                        e = reversed(edge)
+                    else:
+                        e = edge
+                    for i, node_index in enumerate(e):
+                        sorted_edges[index, i] = node_index
+                    unsorted_edges.remove(edge)
+                    index += 1
+                    break
+        self.boundary.edges = sorted_edges
+        self.boundary.edges_sorted = True
+        return sorted_edges
+
+    def get_boundary_faces(self) -> list:
+        if not self.boundary.nodes.any():
+            self.get_boundary()
         boundary_faces = []
         for i, face in enumerate(self.trimesh.faces):
             for item in face:
-                if item in self.boundary_nodes and i not in boundary_faces:
+                if item in self.boundary.nodes and i not in boundary_faces:
                     boundary_faces.append(i)
-        self.boundary_faces = boundary_faces
+        self.boundary.faces = boundary_faces
         return boundary_faces
+
+    def get_corners(self, angle_threshold: float=140.0) -> list:
+        if not self.boundary.edges_sorted:
+            self.get_boundary()
+
+        corners = []
+        previous_edge = self.boundary.edges[-1]
+        for edge in self.boundary.edges:
+            nodes = [previous_edge[0], edge[0], edge[1]]
+            nodes_coords = [self.trimesh.vertices[i] for i in nodes]
+            angle_rad = self.calculate_angle(nodes_coords)
+            if angle_rad <= angle_threshold*np.pi/180.0:
+                corners.append(edge[0])
+            previous_edge = edge
+        self.boundary.corner_nodes = corners
+        self.boundary.corner_node_angle_threshold = angle_threshold
+        return corners
+
+    def calculate_angle(self, nodes):
+        """
+        Calculates the angle between three nodes.
+        nodes:
+            iterable of nodes with coordinates [[x1, y1, z1], [x2, y2, z2], [x3, y3, z3]]
+            where the angle 1-2-3 is then found.
+        """
+        v1 = [a_i - b_i for a_i, b_i in zip(nodes[0], nodes[1])]
+        v2 = [a_i - b_i for a_i, b_i in zip(nodes[2], nodes[1])]
+        dot = np.dot(v1, v2)
+        v1_mag = np.linalg.norm(v1)
+        v2_mag = np.linalg.norm(v2)
+        angle = np.arccos(dot/(v1_mag*v2_mag))
+        return angle
 
     def order_boundary_nodes(self) -> np.ndarray:
         """
         Makes sure all the points in a polygon are consecutive around the polygon.
         """
         # This can be rewritten with the new method I have found.
-        if not self.boundary_nodes:
-            self.boundary_nodes = self.get_boundary_nodes()
+        if not self.boundary.nodes:
+            self.get_boundary()
 
-        indices = self.boundary_nodes
-        coords = self.trimesh.vertices[self.boundary_nodes]
+        indices = self.boundary.nodes
+        coords = self.trimesh.vertices[indices]
         # Creates new coords with same shape as the coords of node positions
         new_coords = np.zeros(shape=np.shape(coords))
         new_indices = np.zeros(shape=np.shape(indices))

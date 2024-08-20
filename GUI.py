@@ -663,123 +663,34 @@ class landmarkFinder(QMainWindow):
         self.main_layout.addWidget(self.info_box, 1, 0)
 
         self.button_layout = QVBoxLayout()
-        self.detect_boundary_btn = QPushButton("Detect Boundary Nodes")
-        self.detect_boundary_btn.clicked.connect(self.detect_boundary_nodes)
-        self.button_layout.addWidget(self.detect_boundary_btn)
-        self.find_corners_btn = QPushButton("Find Corners")
-        self.find_corners_btn.clicked.connect(self.detect_corner_nodes)
-        self.button_layout.addWidget(self.find_corners_btn)
+        self.evaluate_boundary_btn = QPushButton("Evaluate Mesh Boundary")
+        self.evaluate_boundary_btn.clicked.connect(self.evaluate_boundary)
+        self.button_layout.addWidget(self.evaluate_boundary_btn)
+        self.button_layout.addStretch()
 
         self.main_layout.addLayout(self.button_layout, 1, 1)
 
 
         self.main_widget.setLayout(self.main_layout)
 
+        self.resize(520,400)
+
+        # TODO: Change layout parameters to allow for the window to be bigger without messing up the look
+
         # TODO: Add a signal for sending the edits that have been made to the
         # mesh back to the main window.
 
-    def is_mesh_watertight(self):
-        """ Returns a boolean if the mesh is watertight or not. """
-
-    def automatic_mesh_corner_detection(self, mesh:MeshObj.STLMesh):
-        """
-        Returns an array of node numbers and coordinates of any corner
-        nodes that have been detected. Corner nodes are external boundary
-        nodes where the angle is below a certain range. 
-        """
-
-    def detect_boundary_nodes(self):
-        """
-        Returns an array of node numbers and coordinates of any nodes
-        that lie on a boundary. This should also be seperated to between
-        corner nodes.
-        """
-        self.boundary_nodes = self.mesh.get_boundary_nodes()
-        num_nodes = len(self.boundary_nodes)
-        self.update_info_box(f"Detected {str(num_nodes)} boundary nodes!")
-
-    def detect_corner_nodes(self):
-        """
-        Returns an array of node numbers and coordinates of any nodes
-        that lie on a boundary and are on the corner. Where a corner is
-        defined as having an angle of 100 or less with neighbouring
-        boundary nodes.
-        """
-        self.detect_boundary_nodes()
-        self.mesh.get_boundary_faces()
-        node = self.boundary_nodes[0]
-        corners = []
-        previous = node
-        nodes = set(self.boundary_nodes)
-        while len(nodes) > 0:
-            # Check which nodes are neighbours and create a set
-            neighbouring_nodes = self.check_neighbours(node, nodes)
-
-            # Removes the current node from the set of neighbouring nodes.
-            neighbouring_nodes.remove(node)
-
-            nodes.remove(node) # Remove current node from the list of nodes in the search.
-            # Is this the first node and therefore more than one node could be used
-            if len(nodes) == len(self.boundary_nodes) - 1:
-                for i, n in enumerate(neighbouring_nodes):
-                    if i == 0:
-                        previous = n
-                neighbouring_nodes.remove(previous)
-            if len(neighbouring_nodes) > 1:
-                # If there are more than one node left we have a situation where a triangle
-                # lies completely on the edge so we need to find which of the nodes should
-                # be used next. (The one which has all of its nodes in common with the
-                # previous node).
-                for _node in neighbouring_nodes:
-                    n_nodes = self.check_neighbours(_node, nodes)
-                    if n_nodes.issubset(neighbouring_nodes):
-                        angle_rad = self.calculate_angle([self.mesh.trimesh.vertices[previous],
-                                                      self.mesh.trimesh.vertices[node],
-                                                      self.mesh.trimesh.vertices[_node]])
-                        if angle_rad <= 100.0*np.pi/180.0:
-                            corners.append(node)
-                        previous = node
-                        node = _node
-                        break
-            else:
-                for _node in neighbouring_nodes:
-                    angle_rad = self.calculate_angle([self.mesh.trimesh.vertices[previous],
-                                                  self.mesh.trimesh.vertices[node],
-                                                  self.mesh.trimesh.vertices[_node]])
-                    if angle_rad <= 100.0*np.pi/180:
-                        corners.append(node)
-                    previous = node
-                    node = _node
-        print(corners)
-        # Update info box
-        self.update_info_box(f"Corner detection process has been completed!\n{len(corners)} corners were found!")
-
-    def check_neighbours(self, node, nodes):
-        """
-        Creates a set of nodes that are present in nodes that share a face with the node "node".
-        """
-        neighbouring_nodes = set()
-        for face in self.mesh.trimesh.faces[self.mesh.boundary_faces]:
-            if node in face:
-                for n in face:
-                    if n in nodes:
-                        neighbouring_nodes.add(n)
-        return neighbouring_nodes
-
-    def calculate_angle(self, nodes):
-        """
-        Calculates the angle between three nodes.
-        nodes:
-            iterable of nodes with coordinates [[x1, y1, z1], [x2, y2, z2], [x3, y3, z3]]
-            where the angle 1-2-3 is then found.
-        """
-        v1 = [a_i - b_i for a_i, b_i in zip(nodes[0], nodes[1])]
-        v2 = [a_i - b_i for a_i, b_i in zip(nodes[2], nodes[1])]
-        dot = np.dot(v1, v2)
-        v1_mag = np.linalg.norm(v1)
-        v2_mag = np.linalg.norm(v2)
-        angle = np.arccos(dot/(v1_mag*v2_mag))
-        return angle
+    def evaluate_boundary(self):
+        """ Evaluates the boundary of the mesh and stores these parameters
+        in the .boundary."""
+        self.mesh.get_boundary()
+        self.update_info_box("The mesh boundary has been evaluated:")
+        self.update_info_box(f"\tDetected {len(self.mesh.boundary.nodes)} boundary nodes!")
+        self.update_info_box(f"\tDetected {len(self.mesh.boundary.edges)} boundary edges!")
+        self.update_info_box(f"\tDetected {len(self.mesh.boundary.corner_nodes)} \
+                             corners with a threshold of \
+                             {self.mesh.boundary.corner_node_angle_threshold}!")
+        self.update_info_box(f"Corner nodes: {self.mesh.boundary.corner_nodes}")
 
     def update_info_box(self, new_text):
         """ Adds a String to the info box to give a message about function completion to the user.
