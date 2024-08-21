@@ -278,7 +278,7 @@ class MeshMorpherGUI(QMainWindow):
             show_message(message="Landmark finder is currently only supported \
                          for STL meshes!", title="Item Selection Error")
             return
-        self.landmark_finder = landmarkFinder(mesh=mesh, parent=self)
+        self.landmark_finder = LandmarkFinder(mesh=mesh, parent=self)
         self.landmark_finder.show()
 
 
@@ -443,9 +443,9 @@ class Amberg_Mapping(QMainWindow):
 
         # TODO: Have this as a pop up window that prevents you from doing
         # other things while the amberg mapping is taking place.
-        self.progressBar = QProgressBar(self)
-        self.progressBar.setRange(0,1)
-        self.layout.addWidget(self.progressBar, 3, 0)
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setRange(0,1)
+        self.layout.addWidget(self.progress_bar, 3, 0)
 
         self.main_widget.setLayout(self.layout)
 
@@ -495,8 +495,8 @@ class Amberg_Mapping(QMainWindow):
             show_message(message="You need at least two meshes to perform an Amberg Mapping!",
                          title="Mesh Error")
             return
-        source = self.files[self.source.currentText()]
-        target = self.files[self.target.currentText()]
+        source: MeshObj.STLMesh = self.files[self.source.currentText()]
+        target: MeshObj.STLMesh = self.files[self.target.currentText()]
         assert source.units == target.units, "The source and target must have the same units!"
         description = f"Mapping from {self.source.currentText()} to {self.target.currentText()}"
 
@@ -525,6 +525,25 @@ class Amberg_Mapping(QMainWindow):
         f = self.use_faces.isChecked()
         l = self.use_landmarks.isChecked()
 
+        if l:
+            source_vertex_count = len(source.get_boundary())
+            if target.boundary.interpollation_coords is not None and \
+                target.boundary.interpollation_num == source_vertex_count:
+                lpairs = [
+                    [
+                        source.boundary.nodes[i],
+                        [target.boundary.interpollation_coords[i,j] for j in range(3)]
+                    ]
+                    for i in range(len(source.boundary.nodes))
+                    ]
+            else:
+                self.use_landmarks.setChecked(False)
+                show_message(message=f"Landmark pairs were selected, but no \
+suitable landmark pairs were found!\nRun landmark finder \
+with {source_vertex_count} boundary nodes on {target.f_name}")
+                return
+
+
         options = {
             'gamma':g,
             'epsilon':e,
@@ -534,17 +553,18 @@ class Amberg_Mapping(QMainWindow):
             'use_landmarks':l,
         }
 
-        self.thread = AmbergThread(source=source,
+        self.thread: AmbergThread = AmbergThread(source=source,
                                    target=target,
                                    output=output,
                                    steps=steps,
                                    options=options,
-                                   callback=self.handle_result)
-        self.progressBar.setRange(0,0)
+                                   callback=self.handle_result,
+                                   lpairs=lpairs)
+        self.progress_bar.setRange(0,0)
         self.thread.start()
 
     def handle_result(self, result:amberg_mapping.AmbergMapping):
-        self.progressBar.setRange(0,1)
+        self.progress_bar.setRange(0,1)
         output_mesh = result.mapped
         self.parent.files[output_mesh.f_name] = output_mesh
         self.parent.file_manager.addRow(output_mesh.f_name, output_mesh)
@@ -554,7 +574,8 @@ class Amberg_Mapping(QMainWindow):
 class AmbergThread(QThread):
     taskFinished = pyqtSignal(object)
 
-    def __init__(self, source, target, output, steps, options, callback, parent=None):
+    def __init__(self, source, target, output, steps, options, callback,
+                 lpairs, parent=None):
         QThread.__init__(self, parent)
         self.taskFinished.connect(callback)
         self.source = source
@@ -562,24 +583,25 @@ class AmbergThread(QThread):
         self.output = output
         self.steps = steps
         self.options = options
+        self.lpairs = lpairs
 
     def run(self):
-        lpairs = [[1, [0.0625779, -0.0421632, 0.0119162]], # Top Left
-                  [200, [-0.0636008, -0.0421502, 0.0119019]], # Top Right
-                  [10101, [0.0461566, -0.113105, -0.00230067]], # Bottom Left
-                  [10200, [-0.0484762, -0.113245, -0.00233835]]] # Bottom Right
+        #lpairs = [[1, [0.0625779, -0.0421632, 0.0119162]], # Top Left
+        #          [200, [-0.0636008, -0.0421502, 0.0119019]], # Top Right
+        #          [10101, [0.0461566, -0.113105, -0.00230067]], # Bottom Left
+        #          [10200, [-0.0484762, -0.113245, -0.00233835]]] # Bottom Right
 
-        lpairs = [[1, [0.0625774, 0.037793, 0.111964]],
-                  [200, [-0.0636172, 0.0377307, 0.111834]],
-                  [10101, [0.0461407, -0.0332396, 0.0977013]],
-                  [10200, [-0.0484672, -0.0332104, 0.0976772]]]
+        #lpairs = [[1, [0.0625774, 0.037793, 0.111964]],
+        #          [200, [-0.0636172, 0.0377307, 0.111834]],
+        #          [10101, [0.0461407, -0.0332396, 0.0977013]],
+        #          [10200, [-0.0484672, -0.0332104, 0.0976772]]]
 
         AM = amberg_mapping.AmbergMapping(sourcey=self.source,
                                           targety=self.target,
                                           mappedy=self.output,
                                           steps=self.steps,
                                           options=self.options,
-                                          lpairs=lpairs)
+                                          lpairs=self.lpairs)
         self.taskFinished.emit(AM)
 
 class RBF_Morpher(QMainWindow):
@@ -589,6 +611,8 @@ class RBF_Morpher(QMainWindow):
         self.mainWidget = QWidget()
         self.setCentralWidget(self.mainWidget)
         self.parent = parent
+        self.files = parent.files
+        self.WDIR = parent.WDIR
 
         self.main_layout = QVBoxLayout()
 
@@ -612,9 +636,16 @@ class RBF_Morpher(QMainWindow):
         self.morphee.addItems(self.parent.files)
         self.main_layout.addWidget(self.morphee)
 
+        self.use_multithread_check = QCheckBox("Use Multi-Thread RBF")
+        self.main_layout.addWidget(self.use_multithread_check)
+
         self.run_morph_btn = QPushButton("Run Amberg Mapping")
         self.run_morph_btn.clicked.connect(self.initiate_morph)
         self.main_layout.addWidget(self.run_morph_btn)
+
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setRange(0,1)
+        self.main_layout.addWidget(self.progress_bar)
 
         self.mainWidget.setLayout(self.main_layout)
 
@@ -625,19 +656,56 @@ class RBF_Morpher(QMainWindow):
             show_message(message="You need at least two meshes to perform an Amberg Mapping!",
                          title="Mesh Error")
             return
-        unmapped = self.files[self.unmapped.currentText()]
-        mapped = self.files[self.mapped.currentText()]
-        morphee = self.files[self.morphee.currentText()]
+        unmapped: MeshObj.STLMesh = self.files[self.unmapped.currentText()]
+        mapped: MeshObj.STLMesh = self.files[self.mapped.currentText()]
+        morphee: MeshObj.Mesh = self.files[self.morphee.currentText()]
 
-        morpher = RBF_morpher.RBFMorpher(unmapped, mapped, RBF_Morpher.custom_RBF)
+        use_multithread = self.use_multithread_check.isChecked()
 
         # Morph the liner nodes and replace them in the liner mesh objected
-        morphee.nodes[:,1:] = morpher.morph_vertices(morphee.nodes[:,1:])
-        name = morphee.f_name + "_mrophed.inp"
-        morphee.write_inp(name)
+        self.thread: RBF_Thread = RBF_Thread(unmapped=unmapped,
+                                             mapped=mapped,
+                                             morphee=morphee,
+                                             use_multithread=use_multithread,
+                                             callback=self.handle_result)
+        self.progress_bar.setRange(0,0)
+        self.thread.start()
+
+    def handle_result(self, result:MeshObj.Mesh):
+        """ Handles the results from the RBF Thread. """
+        self.progress_bar.setRange(0,1)
+        old_name = result.f_name
+        result.rename(f"{old_name}_RBF_Morph")
+        self.parent.files[result.f_name] = result
+        self.parent.file_manager.addRow(result.f_name, result)
+        self.parent.filesDrop.append(result.f_name)
         self.close()
 
-class landmarkFinder(QMainWindow):
+class RBF_Thread(QThread):
+    """ Thread for processing RBF tasks. """
+    taskFinished = pyqtSignal(object)
+
+    def __init__(self, unmapped, mapped, morphee, use_multithread, callback,
+                 parent=None):
+        QThread.__init__(self, parent)
+        self.taskFinished.connect(callback)
+        self.unmapped = unmapped
+        self.mapped = mapped
+        self.morphee = morphee
+        self.use_multithread = use_multithread
+
+    def run(self):
+        """ Starts the thread. """
+        morpher: RBF_morpher.RBFMorpher \
+            = RBF_morpher.RBFMorpher(self.unmapped,
+                                     self.mapped,
+                                     RBF_morpher.custom_RBF,
+                                     use_multithread=self.use_multithread)
+        nodes = morpher.morph_vertices(self.morphee.nodes)
+        self.morphee.update_nodes(nodes)
+        self.taskFinished.emit(self.morphee)
+
+class LandmarkFinder(QMainWindow):
     """ A class of QMainWindow that handles the automatic detection of
     boundary nodes in a mesh that could be used as langmark nodes in the
     amberg morphing algorithm. 
@@ -645,7 +713,7 @@ class landmarkFinder(QMainWindow):
     The algorithms for this should potentially be within the MeshObj class.
     """
     def __init__(self, mesh:MeshObj.STLMesh, parent = None):
-        super(landmarkFinder, self).__init__(parent)
+        super(LandmarkFinder, self).__init__(parent)
         self.setWindowTitle("Landmark Finder")
         self.main_widget = QWidget()
         self.setCentralWidget(self.main_widget)
@@ -666,6 +734,17 @@ class landmarkFinder(QMainWindow):
         self.evaluate_boundary_btn = QPushButton("Evaluate Mesh Boundary")
         self.evaluate_boundary_btn.clicked.connect(self.evaluate_boundary)
         self.button_layout.addWidget(self.evaluate_boundary_btn)
+        self.resample_boundary_btn = QPushButton("Resmple Mesh Boundary")
+        self.resample_boundary_btn.clicked.connect(self.resample_boundary_nodes)
+        self.button_layout.addWidget(self.resample_boundary_btn)
+        self.num_nodes_label = QLabel("Number of Resampled Nodes")
+        self.button_layout.addWidget(self.num_nodes_label)
+        self.num_nodes_selector = QSpinBox()
+        self.num_nodes_selector.setRange(1, 1000)
+        self.num_nodes_selector.setValue(76)        
+        self.button_layout.addWidget(self.num_nodes_selector)
+        self.ccw_flag = QCheckBox("Counter-Clockwise Resampling")
+        self.button_layout.addWidget(self.ccw_flag)
         self.button_layout.addStretch()
 
         self.main_layout.addLayout(self.button_layout, 1, 1)
@@ -675,7 +754,8 @@ class landmarkFinder(QMainWindow):
 
         self.resize(520,400)
 
-        # TODO: Change layout parameters to allow for the window to be bigger without messing up the look
+        # TODO: Change layout parameters to allow for the window to be bigger
+        # without messing up the look
 
         # TODO: Add a signal for sending the edits that have been made to the
         # mesh back to the main window.
@@ -684,6 +764,7 @@ class landmarkFinder(QMainWindow):
         """ Evaluates the boundary of the mesh and stores these parameters
         in the .boundary."""
         self.mesh.get_boundary()
+        boundary_nodes = self.mesh.restarted_arranged_nodes(starting_point=[1.0, 1.0, 1.0])
         self.update_info_box("The mesh boundary has been evaluated:")
         self.update_info_box(f"\tDetected {len(self.mesh.boundary.nodes)} boundary nodes!")
         self.update_info_box(f"\tDetected {len(self.mesh.boundary.edges)} boundary edges!")
@@ -691,6 +772,13 @@ class landmarkFinder(QMainWindow):
                              corners with a threshold of \
                              {self.mesh.boundary.corner_node_angle_threshold}!")
         self.update_info_box(f"Corner nodes: {self.mesh.boundary.corner_nodes}")
+
+    def resample_boundary_nodes(self):
+        """ Resamples the boundary nodes to a given node count. """
+        num_nodes = self.num_nodes_selector.value()
+        self.mesh.resample_boundary_nodes(num_nodes, ccw_flag=self.ccw_flag.isChecked())
+        self.update_info_box(f"Mesh boundary has been resampled to give \
+                             coordinates of {num_nodes}.")
 
     def update_info_box(self, new_text):
         """ Adds a String to the info box to give a message about function completion to the user.

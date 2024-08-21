@@ -10,9 +10,15 @@ class RBFMorpher:
     defined by the mapping of some source nodes (vetices). The radial
     basis function (RBF) is hard-coded in this class, but that may be
     changed later."""
-    def __init__(self, original_mesh: MeshObj.STLMesh, displaced_mesh: MeshObj.STLMesh, RBF):
+    def __init__(self, original_mesh: MeshObj.STLMesh,
+                 displaced_mesh: MeshObj.STLMesh,
+                 RBF,
+                 use_multithread: bool=False,
+                 processors: int=4):
 
         self.RBF = RBF
+        self.use_multithread = use_multithread
+        self.processors = processors
 
         self.original_source_vertices = np.array(original_mesh.trimesh.vertices)
         self.source_v_disp = np.array(displaced_mesh.trimesh.vertices)-self.original_source_vertices
@@ -59,19 +65,19 @@ class RBFMorpher:
         print(("Successfuly Generated Coefficient Matrix in "+str(time.time()-start_time)+"s"))
         self.coeff_matrix = coeff_matrix
 
-    def calculate_displacements(self, points, parrallel:bool=False, processors:int=4):
+    def calculate_displacements(self, points):
         """Calculates the individual displacements required by morph_vertices."""
         n_points = len(points)
         print("Calculating Displacements of "+str(n_points)+" points")
         start_time = time.time()
 
-        if parrallel:
+        if self.use_multithread:
             lock = Lock()
             displacement_x = Array('f', n_points, lock=lock)
             displacement_y = Array('f', n_points, lock=lock)
             displacement_z = Array('f', n_points, lock=lock)
             number_of_tasks = self.n
-            number_of_processes = processors
+            number_of_processes = self.processors
             processes = []
 
             # instantiating a queue object
@@ -92,7 +98,10 @@ class RBFMorpher:
             # creating processes
             print(f'Creating {number_of_processes} processes')
             for w in range(number_of_processes):
-                p = Process(target=self.do_job, args=(tasks_to_do, tasks_done, points, displacement_x, displacement_y, displacement_z, lock))
+                p = Process(target=self.do_job,
+                            args=(tasks_to_do, tasks_done, points,
+                                  displacement_x, displacement_y,
+                                  displacement_z, lock))
                 processes.append(p)
                 p.start()
 
@@ -100,14 +109,16 @@ class RBFMorpher:
             print('Waiting for processes to finish')
             for p in processes:
                 p.join()
-        
 
             # collecting results
             print('Getting output from processes')
             while not tasks_done.empty():
                 print(f'Processing {int(tasks_done.get())}!')
 
-            displacements = [ [displacement_x[i], displacement_y[i], displacement_z[i]] for i in range(n_points)]
+            displacements = [
+                [displacement_x[i], displacement_y[i], displacement_z[i]]
+                for i in range(n_points)
+                ]
 
             print("Displacements Successfully Calculated in "+str(time.time()-start_time)+"s")
             return displacements
@@ -115,23 +126,15 @@ class RBFMorpher:
         else:
             # Non parallel calculation
             displacements = np.zeros((n_points, 3))
-            for vertex_index in range(0, self.n):
+            for vertex_index in range(self.n):
                 displacements += self._disp_calculation(vertex_index, points)
 
-        #displacements = np.zeros((n_points, 3))
-        #for vertex_index in range(0, self.n):
-        #    for point_index in range(0, n_points):
-        #        point = points[point_index]
-        #        source_vertex = self.original_source_vertices[vertex_index]
-        #        diff_vec = point-source_vertex
-        #        displacements[point_index] \
-        #            += self.coeff_matrix[vertex_index] * self.RBF(self.__magnitude(diff_vec))
-
         print("Displacements Successfully Calculated in "+str(time.time()-start_time)+"s")
-        print(displacements)
         return displacements
 
-    def do_job(self, tasks_to_do, tasks_done, points, displacement_x, displacement_y, displacement_z, lock):
+    def do_job(self, tasks_to_do, tasks_done, points, displacement_x,
+               displacement_y, displacement_z, lock):
+        """ Function for multithreading task. """
         while True:
             try:
                 task = tasks_to_do.get_nowait()
@@ -144,9 +147,9 @@ class RBFMorpher:
                 for vertex_index in task:
                     disp += self._disp_calculation(vertex_index, points)
                 with lock:
-                    displacement_x.value = displacement_x.value + disp[:,0]
-                    displacement_y.value = displacement_y.value + disp[:,1]
-                    displacement_z.value = displacement_z.value + disp[:,2]
+                    displacement_x[:] = displacement_x[:] + disp[:,0]
+                    displacement_y[:] = displacement_y[:] + disp[:,1]
+                    displacement_z[:] = displacement_z[:] + disp[:,2]
                 tasks_done.put(f'Task {int(task[0]/100)} is finished!')
             except queue.Empty():
                 break
@@ -159,16 +162,16 @@ class RBFMorpher:
         disps = np.zeros((len(points), 3))
         for i, point in enumerate(points):
             source_vertex = self.original_source_vertices[vertex_index]
-            diff_vec = point-source_vertex
+            diff_vec = point - source_vertex
             disps[i] = self.coeff_matrix[vertex_index] * self.RBF(self.__magnitude(diff_vec))
         return disps
 
     def morph_vertices(self, points):
         """Takes a set of points and morphes them according to the transformation matix in self."""
         displacements = self.calculate_displacements(points)
-        new_vertices = np.zeros((len(displacements), 3))
+        new_vertices = np.zeros(np.shape(points))
         for i, point in enumerate(points):
-            new_vertices[i] = point + displacements[i]
+            new_vertices[i] = np.add(point, displacements[i])
         return new_vertices
 
 

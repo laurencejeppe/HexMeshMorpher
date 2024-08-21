@@ -18,6 +18,7 @@ FOLDER = 'Geometry'
 class Boundary():
     """ Data class for holding information about the boundary of a mesh. """
     nodes: np.ndarray = None
+    nodes_sorted: bool = False
     is_watertight: bool = None
     edges: np.ndarray = None
     edges_sorted: bool = False
@@ -25,6 +26,8 @@ class Boundary():
     num_nodes: int = None
     corner_nodes: list = None
     corner_node_angle_threshold: float = None
+    interpollation_coords: np.ndarray = None
+    interpollation_num: np.ndarray = None
 
 
 class Mesh():
@@ -39,11 +42,10 @@ class Mesh():
         self.f_path = self.path()
         self.num_nodes:int = None
         self.num_elements:int = None
-        self.num_boundary_nodes:int = None
-        self.boundary_nodes: np.ndarray = None
-        self.boundary_faces: np.ndarray = None
         self.boundary: Boundary = Boundary()
         self.units:str = None
+
+        self.nodes: np.ndarray = None
 
     def path(self, file_name: str=None, file_type: str=None):
         """Generates the path of the mesh object depending on the f_name and f_type"""
@@ -59,6 +61,7 @@ class Mesh():
 
     def set_units(self, units: str):
         self.units = units
+
 
 def rot_x(ang):
     """Returns transformation matrix for rotations of ang (deg) about the x axis"""
@@ -117,7 +120,8 @@ class STLMesh(Mesh):
 
     def load_stl(self) -> None:
         """Loads STL file as trimesh object."""
-        self.trimesh = tr.load_mesh(self.path())
+        self.trimesh: tr.Trimesh = tr.load_mesh(self.path())
+        self.nodes = np.array(self.trimesh.vertices)
         self.num_nodes = len(self.trimesh.vertices)
         self.num_elements = len(self.trimesh.faces)
         x1 = np.max(self.trimesh.vertices[:][0])
@@ -126,6 +130,9 @@ class STLMesh(Mesh):
             self.units = "mm"
         else:
             self.units = "m"
+
+    def update_nodes(self, nodes):
+        self.trimesh.vertices = nodes
 
     def save_mesh(self, file_path):
         self.save_trimesh_as_stl(file_path=file_path)
@@ -221,16 +228,22 @@ class STLMesh(Mesh):
         ]
 
         self.boundary.edges = unique_edges
-        self.arrange_boundary_edges()
         self.boundary.nodes = np.unique(unique_edges.flatten())
+        self.arrange_boundary()
         self.boundary.is_watertight = self.trimesh.is_watertight
         self.boundary.num_nodes = len(self.boundary.nodes)
         self.get_boundary_faces()
         self.get_corners(angle_threshold=140.0)
         return self.boundary.nodes
 
+    def arrange_boundary(self) -> None:
+        """ Arranges the boundary edges and nodes. """
+        self.arrange_boundary_edges()
+        self.arrange_boundary_nodes()
+
     def arrange_boundary_edges(self) -> np.ndarray:
-        if not self.boundary.edges.any():
+        """ Edges are stored in a nx2 numpy array. """
+        if self.boundary.edges is None:
             self.get_boundary()
         boundary_edges = self.boundary.edges
 
@@ -256,8 +269,21 @@ class STLMesh(Mesh):
         self.boundary.edges_sorted = True
         return sorted_edges
 
+    def arrange_boundary_nodes(self) -> np.ndarray:
+        """ Arranges the nodes array to match the ordered list of edges. """
+        if not self.boundary.edges_sorted:
+            self.arrange_boundary_edges()
+        sorted_nodes = np.zeros(np.shape(self.boundary.nodes), dtype=np.uint32)
+        for i, edge in enumerate(self.boundary.edges):
+            sorted_nodes[i] = int(edge[0])
+        assert set(sorted_nodes) == set(self.boundary.nodes), "Error in sorting nodes."
+        self.boundary.nodes = sorted_nodes
+        self.boundary.nodes_sorted = True
+        return sorted_nodes
+
     def get_boundary_faces(self) -> list:
-        if not self.boundary.nodes.any():
+        """ Finds all the faces that have edges along the boundary. """
+        if self.boundary.nodes is None:
             self.get_boundary()
         boundary_faces = []
         for i, face in enumerate(self.trimesh.faces):
@@ -268,6 +294,7 @@ class STLMesh(Mesh):
         return boundary_faces
 
     def get_corners(self, angle_threshold: float=140.0) -> list:
+        """ Finds all the corners of a mesh defined by a certain angle threshold. """
         if not self.boundary.edges_sorted:
             self.get_boundary()
 
@@ -299,84 +326,79 @@ class STLMesh(Mesh):
         angle = np.arccos(dot/(v1_mag*v2_mag))
         return angle
 
-    def order_boundary_nodes(self) -> np.ndarray:
+    def restarted_arranged_nodes(self, starting_point: np.ndarray=None,
+                                 rotational_axis: np.ndarray=None,
+                                 ccw_flag: bool=False) -> np.ndarray:
         """
-        Makes sure all the points in a polygon are consecutive around the polygon.
+        Arranges the nodes array such that the point closest to 
+        starting_point is the first element and the subsequent nodes go around
+        in a clockwise direction about the axis (rotation_axis).
         """
-        # This can be rewritten with the new method I have found.
-        if not self.boundary.nodes:
-            self.get_boundary()
+        if not self.boundary.nodes_sorted:
+            self.arrange_boundary()
+        if not starting_point:
+            starting_point = np.array([0.0, 0.0, -1.0])
+        if not rotational_axis:
+            rotational_axis = np.array([0.0, 1.0, 0.0])
+        if ccw_flag:
+            rotational_axis = np.copysign(rotational_axis,-1)
 
+        coords = self.trimesh.vertices[self.boundary.nodes]
         indices = self.boundary.nodes
-        coords = self.trimesh.vertices[indices]
-        # Creates new coords with same shape as the coords of node positions
-        new_coords = np.zeros(shape=np.shape(coords))
-        new_indices = np.zeros(shape=np.shape(indices))
-        # Sets the first value to the point closest to the y intersept at the maximum x value and mean z value
-        new_coords[0] = [np.max(coords[:,0]), np.mean(coords[:,1]), 0] # Changed for aligned with z
-        # Finds the distances between the each point in coords and this first value in new_coords
-        distances = np.linalg.norm(coords - new_coords[0], axis=1)
-        # Fids the index of the minimum distance
+        new_indices = np.zeros(np.shape(indices), dtype=np.uint32)
+        # Calculate the distances from the start point to each of the boundary nodes
+        distances = np.linalg.norm(coords - starting_point, axis=1)
+        # Index of the closest value
         index = np.argmin(distances)
-        # Finds the closest point to where the y value goes negative
-        n = 2
-        if len(new_coords) - len(coords) < 5:
-            while coords[index][2] > 0: # Changed from coords[index][2] for when it was aligned with y
-                index = np.where(distances == np.partition(distances, n-1)[n-1])[0][0]
-                n += 1
-            n = 2
-        # Sets the closest point as the first point in the new_coords
-        new_coords[0] = coords[index]
-        new_indices[0] = indices[index]
-        coords = np.delete(coords, index, 0) # Deletes this point from the old coords
-        indices = np.delete(indices, index, 0)
-        i = 1
-        # For each point the distance coords is calculated, the index of the
-        # minimum distance is found, this is added to the new coords and
-        # deleted from the old coords. For the first five terms there is a
-        # check to see if we are still going in the negative y direction.
-        while coords.any():
-            # Calculated distances
-            distances = np.linalg.norm(coords - new_coords[i-1], axis=1)
-            index = np.argmin(distances) # Find index of min distance
-            if len(new_coords) - len(coords) < 5: # Check if we are going in negative y
-                while coords[index][2] > 0: # Changed from coords[index][2] for when it was aligned with y
-                    index = np.where(distances == np.partition(distances, n-1)[n-1])[0][0]
-                    n += 1
-                n = 2
-            # Set new coords value to the point with the minimum distance.
-            new_coords[i] = coords[index]
-            new_indices[i] = indices[index]
-            # Delete value from old coords
-            coords = np.delete(coords, index, 0)
-            indices = np.delete(indices, index, 0)
-            i += 1
-        new_boundary_nodes = new_indices
-        self.boundary_nodes = new_boundary_nodes
-        return new_boundary_nodes
+        # Checks to see if the order of the nodes is going round the z axis in
+        # a clockwise rotation < 0 or a counter-clockwise rotation > 0
+        # direction.
+        rotation = np.dot(rotational_axis, np.cross(coords[index], coords[index+1]))
+        if rotation > 0:
+            indices = np.flip(indices)
+            print("Index array has been flipped.")
+        for i, item in enumerate(new_indices):
+            if i + index < len(indices):
+                new_indices[i] = indices[i + index]
+            else:
+                new_indices[i] = indices[i + index - len(indices)]
+        assert set(new_indices) == set(indices), "Rearranging indices has failed"
+        return new_indices
 
-    def resample_boundary_nodes(self, num_nodes):
+    def resample_boundary_nodes(self, num_nodes, ccw_flag: bool=False):
         """
         Interpolates the points around a polygon.
         """
-        boundary_nodes = self.order_boundary_nodes()
-        array = self.trimesh.vertices[self.boundary_nodes]
+        # TODO: This needs to be redone such that the corner nodes are not
+        # affected by the resampling. i.e. between each corner resample, but
+        # corners should stay in the same places.
+        if self.boundary.nodes is None:
+            self.get_boundary()
+        if not self.boundary.nodes_sorted:
+            self.arrange_boundary()
+
+        boundary_nodes = self.restarted_arranged_nodes(ccw_flag=ccw_flag)
+        coords = self.trimesh.vertices[boundary_nodes]
+        coords = np.append(coords, [coords[0]], axis=0)
 
         # Cumulative Euclidean distance between successive polygon points.
         # This will be the "x" for interpolation
-        d = np.cumsum(np.r_[0, np.sqrt((np.diff(array, axis=0) ** 2).sum(axis=1))])
-
+        d = np.cumsum(np.r_[0, np.sqrt((np.diff(coords, axis=0) ** 2).sum(axis=1))])
         # get linearly spaced points along the cumulative Euclidean distance
-        d_sampled = np.linspace(0, d.max(), num_nodes)
+        d_sampled = np.linspace(0, d.max(), num_nodes + 1)
 
         # interpolate x and y coordinates
-        interp = np.c_[
-            np.interp(d_sampled, d, array[:, 0]),
-            np.interp(d_sampled, d, array[:, 1]),
-            np.interp(d_sampled, d, array[:, 2]),
+        interp_array = np.c_[
+            np.interp(d_sampled, d, coords[:, 0]),
+            np.interp(d_sampled, d, coords[:, 1]),
+            np.interp(d_sampled, d, coords[:, 2]),
         ]
-        boundary_nodes.coords = interp
-        return boundary_nodes
+        last_index = len(interp_array) - 1
+        interp_array = np.delete(interp_array, last_index, axis=0)
+
+        self.boundary.interpollation_coords = interp_array
+        self.boundary.interpollation_num = num_nodes
+        return interp_array
 
     def change_units(self, factor, units):
         """ Changes the units of a mesh by a given factor. """
@@ -474,6 +496,9 @@ class INPMesh(Mesh):
             self.units = "mm"
         else:
             self.units = "m"
+
+    def update_nodes(self, nodes):
+        self.nodes = nodes
 
     def change_units(self, factor, units):
         for i, node in enumerate(self.nodes):
