@@ -703,8 +703,9 @@ class RBF_Thread(QThread):
                                      self.mapped,
                                      RBF_morpher.custom_RBF,
                                      use_multithread=self.use_multithread)
-        nodes = morpher.morph_vertices(self.morphee.nodes)
+        nodes = morpher.morph_vertices(self.morphee.nodes[:,1:])
         self.morphee.update_nodes(nodes)
+
         self.taskFinished.emit(self.morphee)
 
 class LandmarkFinder(QMainWindow):

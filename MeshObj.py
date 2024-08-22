@@ -121,7 +121,7 @@ class STLMesh(Mesh):
     def load_stl(self) -> None:
         """Loads STL file as trimesh object."""
         self.trimesh: tr.Trimesh = tr.load_mesh(self.path())
-        self.nodes = np.array(self.trimesh.vertices)
+        self.nodes = np.array([[i, vertex[0], vertex[1], vertex[2]] for i, vertex in enumerate(self.trimesh.vertices)])
         self.num_nodes = len(self.trimesh.vertices)
         self.num_elements = len(self.trimesh.faces)
         x1 = np.max(self.trimesh.vertices[:][0])
@@ -132,7 +132,9 @@ class STLMesh(Mesh):
             self.units = "m"
 
     def update_nodes(self, nodes):
-        self.nodes = nodes
+        for i, node in enumerate(nodes):
+            for j, coord in enumerate(node):
+                self.nodes[i, j+1] = coord
         self.trimesh.vertices = nodes
 
     def save_mesh(self, file_path):
@@ -499,7 +501,9 @@ class INPMesh(Mesh):
             self.units = "m"
 
     def update_nodes(self, nodes):
-        self.nodes = nodes
+        for i, node in enumerate(nodes):
+            for j, coord in enumerate(node):
+                self.nodes[i,j+1] = coord
 
     def change_units(self, factor, units):
         for i, node in enumerate(self.nodes):
