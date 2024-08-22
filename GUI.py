@@ -542,6 +542,8 @@ class Amberg_Mapping(QMainWindow):
 suitable landmark pairs were found!\nRun landmark finder \
 with {source_vertex_count} boundary nodes on {target.f_name}")
                 return
+        else:
+            lpairs = []
 
 
         options = {
@@ -662,7 +664,7 @@ class RBF_Morpher(QMainWindow):
 
         use_multithread = self.use_multithread_check.isChecked()
 
-        # Morph the liner nodes and replace them in the liner mesh objected
+        # Morph the nodes and replace them in the mesh objected
         self.thread: RBF_Thread = RBF_Thread(unmapped=unmapped,
                                              mapped=mapped,
                                              morphee=morphee,

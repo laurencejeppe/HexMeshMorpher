@@ -132,6 +132,7 @@ class STLMesh(Mesh):
             self.units = "m"
 
     def update_nodes(self, nodes):
+        self.nodes = nodes
         self.trimesh.vertices = nodes
 
     def save_mesh(self, file_path):
