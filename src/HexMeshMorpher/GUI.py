@@ -16,7 +16,6 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QHeaderView, QDoubleSpinBox, QSpinBox,
                              QAbstractSpinBox, QStyle, QDialog, QProgressBar,
                              QTextEdit, QDialogButtonBox)
-import numpy as np
 import MeshObj
 import amberg_mapping
 import RBF_morpher
