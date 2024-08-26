@@ -112,16 +112,11 @@ class STLMesh(Mesh):
         if load:
             self.load_stl()
 
-        # TODO: Potentially a better idea to not have so many landmark points,
-        # but instead have a few, then transform all the rim nodes to the same
-        # value.
-        # This is specifically for the liner meshes and won't help with the
-        # collar meshes.
-
     def load_stl(self) -> None:
         """Loads STL file as trimesh object."""
         self.trimesh: tr.Trimesh = tr.load_mesh(self.path())
-        self.nodes = np.array([[i, vertex[0], vertex[1], vertex[2]] for i, vertex in enumerate(self.trimesh.vertices)])
+        self.nodes = np.array([[i, vertex[0], vertex[1], vertex[2]]
+                               for i, vertex in enumerate(self.trimesh.vertices)])
         self.num_nodes = len(self.trimesh.vertices)
         self.num_elements = len(self.trimesh.faces)
         x1 = np.max(self.trimesh.vertices[:][0])
