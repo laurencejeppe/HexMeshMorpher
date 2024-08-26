@@ -1,6 +1,6 @@
 # test_pytest_unittest.py
 
-import src.MeshObj as mesh
+import src.HexMeshMorpher.MeshObj as mesh
 import numpy as np
 
 def test_meshobj_transformations():
