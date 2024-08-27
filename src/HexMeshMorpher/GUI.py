@@ -770,9 +770,9 @@ class LandmarkFinder(QMainWindow):
         self.update_info_box("The mesh boundary has been evaluated:")
         self.update_info_box(f"\tDetected {len(self.mesh.boundary.nodes)} boundary nodes!")
         self.update_info_box(f"\tDetected {len(self.mesh.boundary.edges)} boundary edges!")
-        self.update_info_box(f"\tDetected {len(self.mesh.boundary.corner_nodes)} \
-                             corners with a threshold of \
-                             {self.mesh.boundary.corner_node_angle_threshold}!")
+        self.update_info_box(f"\tDetected {len(self.mesh.boundary.corner_nodes)}" \
+                             + " corners with a threshold of" \
+                             + f" {self.mesh.boundary.corner_node_angle_threshold} degrees!")
         self.update_info_box(f"Corner nodes: {self.mesh.boundary.corner_nodes}")
 
     def resample_boundary_nodes(self):
@@ -889,7 +889,7 @@ def show_message(message, message_type="err", title="An Error Occured..."):
 if __name__=="__main__":
     app = QApplication(sys.argv)
     win = MeshMorpherGUI()
-    with open("styles/styles.css", "r", encoding="utf-8") as file:
+    with open("src/HexMeshMorpher/styles/styles.css", "r", encoding="utf-8") as file:
         app.setStyleSheet(file.read())
     win.show()
     sys.exit(app.exec())
