@@ -383,20 +383,19 @@ class STLMesh(Mesh):
 
         if self.boundary.corner_nodes:
             indexes = []
-            for corner_node in self.boundary.corner_nodes:
-                indexes.append(np.where(boundary_nodes == corner_node)[0][0])
-            print(indexes)
+            for i, boundary_node in enumerate(boundary_nodes):
+                if boundary_node in self.boundary.corner_nodes:
+                    indexes.append(i)
             start_indexes = indexes.copy()
             start_indexes.insert(0, 0)
             end_indexes = indexes.copy()
             end_indexes.append(-1)
-            print(start_indexes)
-            print(end_indexes)
-            print()
             limits = []
             for i in range(len(self.boundary.corner_nodes) + 1):
                 limits.append([start_indexes[i], end_indexes[i]])
-            print(limits)
+            for i, corner_node in enumerate(self.boundary.corner_nodes):
+                # TODO: Put here to run the resampling for the points between each corner.
+                pass
         else:
             coords = self.trimesh.vertices[boundary_nodes]
             coords = np.append(coords, [coords[0]], axis=0)
