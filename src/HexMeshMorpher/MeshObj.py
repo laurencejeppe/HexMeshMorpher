@@ -332,6 +332,8 @@ class STLMesh(Mesh):
         starting_point is the first element and the subsequent nodes go around
         in a clockwise direction about the axis (rotation_axis).
         """
+        # TODO: change this to use corner nodes if they are present
+        # Start with the corner node that is closest to the starting point.
         if not self.boundary.nodes_sorted:
             self.arrange_boundary()
         if not starting_point:
@@ -379,6 +381,36 @@ class STLMesh(Mesh):
         coords = self.trimesh.vertices[boundary_nodes]
         coords = np.append(coords, [coords[0]], axis=0)
 
+        if self.boundary.corner_nodes:
+            indexes = []
+            for corner_node in self.boundary.corner_nodes:
+                indexes.append(np.where(boundary_nodes == corner_node)[0][0])
+            print(indexes)
+            start_indexes = indexes.copy()
+            start_indexes.insert(0, 0)
+            end_indexes = indexes.copy()
+            end_indexes.append(-1)
+            print(start_indexes)
+            print(end_indexes)
+            print()
+            limits = []
+            for i in range(len(self.boundary.corner_nodes) + 1):
+                limits.append([start_indexes[i], end_indexes[i]])
+            print(limits)
+        else:
+            coords = self.trimesh.vertices[boundary_nodes]
+            coords = np.append(coords, [coords[0]], axis=0)
+            interp_array = self.resample_nodes(coords, num_nodes)
+
+        self.boundary.interpollation_coords = interp_array
+        self.boundary.interpollation_num = num_nodes
+        return interp_array
+    
+    def resample_nodes(self, coords, num_nodes):
+        """
+        coords is the array of coordinates of the nodes being resampled.
+        num_interp is the number of points you want for the interpolation.
+        """
         # Cumulative Euclidean distance between successive polygon points.
         # This will be the "x" for interpolation
         d = np.cumsum(np.r_[0, np.sqrt((np.diff(coords, axis=0) ** 2).sum(axis=1))])
@@ -393,10 +425,8 @@ class STLMesh(Mesh):
         ]
         last_index = len(interp_array) - 1
         interp_array = np.delete(interp_array, last_index, axis=0)
-
-        self.boundary.interpollation_coords = interp_array
-        self.boundary.interpollation_num = num_nodes
         return interp_array
+
 
     def change_units(self, factor, units):
         """ Changes the units of a mesh by a given factor. """
