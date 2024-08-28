@@ -4,27 +4,27 @@ import src.HexMeshMorpher.MeshObj as mesh
 import numpy as np
 
 def test_meshobj_transformations():
-    assert (mesh.rot_x(90).astype(float) == np.array([[1, 0, 0, 0],
+    assert (np.round(mesh.rot_x(90).astype(float), 5) == np.array([[1, 0, 0, 0],
                                       [0, 0, -1, 0],
                                       [0, 1, 0, 0],
                                       [0, 0, 0, 1]]).astype(float)).all()
-    assert (mesh.rot_y(90).astype(float) == np.array([[0, 0, 1, 0],
+    assert (np.round(mesh.rot_y(90).astype(float), 5) == np.array([[0, 0, 1, 0],
                                       [0, 1, 0, 0],
                                       [-1, 0, 0, 0],
                                       [0, 0, 0, 1]]).astype(float)).all()
-    assert (mesh.rot_z(90).astype(float) == np.array([[0, -1, 0, 0],
+    assert (np.round(mesh.rot_z(90).astype(float), 5) == np.array([[0, -1, 0, 0],
                                       [1, 0, 0, 0],
                                       [0, 0, 1, 0],
                                       [0, 0, 0, 1]]).astype(float)).all()
-    assert (mesh.rot_x(0).astype(float) == np.array([[1, 0, 0, 0],
+    assert (np.round(mesh.rot_x(0).astype(float), 5) == np.array([[1, 0, 0, 0],
                                      [0, 1, 0, 0],
                                      [0, 0, 1, 0],
                                      [0, 0, 0, 1]]).astype(float)).all()
-    assert (mesh.rot_y(0).astype(float) == np.array([[1, 0, 0, 0],
+    assert (np.round(mesh.rot_y(0).astype(float), 5) == np.array([[1, 0, 0, 0],
                                      [0, 1, 0, 0],
                                      [0, 0, 1, 0],
                                      [0, 0, 0, 1]]).astype(float)).all()
-    assert (mesh.rot_z(0).astype(float) == np.array([[1, 0, 0, 0],
+    assert (np.round(mesh.rot_z(0).astype(float), 5) == np.array([[1, 0, 0, 0],
                                      [0, 1, 0, 0],
                                      [0, 0, 1, 0],
                                      [0, 0, 0, 1]]).astype(float)).all()
