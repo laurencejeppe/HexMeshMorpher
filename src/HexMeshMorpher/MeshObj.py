@@ -345,23 +345,29 @@ class STLMesh(Mesh):
 
         coords = self.trimesh.vertices[self.boundary.nodes]
         indices = self.boundary.nodes
-        new_indices = np.zeros(np.shape(indices), dtype=np.uint32)
-        # Calculate the distances from the start point to each of the boundary nodes
-        distances = np.linalg.norm(coords - starting_point, axis=1)
-        # Index of the closest value
-        index = np.argmin(distances)
+
+        # Get the starting point
+        if self.boundary.corner_nodes:
+            corner_coords = self.trimesh.vertices[self.boundary.corner_nodes]
+            distances = np.linalg.norm(corner_coords - starting_point, axis=1)
+            node_num = self.boundary.corner_nodes[np.argmin(distances)]
+        else:
+            # Calculate the distances from the start point to each of the boundary nodes
+            distances = np.linalg.norm(coords - starting_point, axis=1)
+            # Index of the closest value
+            node_num = self.boundary.nodes[np.argmin(distances)]
         # Checks to see if the order of the nodes is going round the z axis in
         # a clockwise rotation < 0 or a counter-clockwise rotation > 0
         # direction.
+        index = np.where(indices == node_num)[0][0]
         rotation = np.dot(rotational_axis, np.cross(coords[index], coords[index+1]))
         if rotation > 0:
             indices = np.flip(indices)
             print("Index array has been flipped.")
-        for i, item in enumerate(new_indices):
-            if i + index < len(indices):
-                new_indices[i] = indices[i + index]
-            else:
-                new_indices[i] = indices[i + index - len(indices)]
+        # Split and rejoin the array
+        index = np.where(indices == node_num)[0][0]
+        [ a1, a2 ] = np.split(indices, np.array([index]))
+        new_indices = np.concatenate(( a2, a1, ), dtype=np.uint32)
         assert set(new_indices) == set(indices), "Rearranging indices has failed"
         return new_indices
 
@@ -382,6 +388,7 @@ class STLMesh(Mesh):
         coords = np.append(coords, [coords[0]], axis=0)
 
         if self.boundary.corner_nodes:
+            # TODO: Adjust the nodes number to be representitive of the total number of nodes.
             indexes = []
             for i, boundary_node in enumerate(boundary_nodes):
                 if boundary_node in self.boundary.corner_nodes:
@@ -391,18 +398,18 @@ class STLMesh(Mesh):
             coords_list = []
             for i in range(len(self.boundary.corner_nodes) + 1):
                 limit = [indexes[i], indexes[i+1]]
-                coords_list.append(self.trimesh.vertices[boundary_nodes[limit[0]:limit[1]]])
+                print(limit)
+                coords_list.append(self.trimesh.vertices[boundary_nodes[limit[0]:limit[1]+1]])
             coords_list[-1] = np.append(coords_list[-1], coords_list[0], axis=0)
             del coords_list[0]
-            interp_array = []
+            interp_array = np.array([])
             for coords in coords_list:
-                print("Original Coords: ")
-                print(coords[0])
-                print(coords[-1])
-                interp_array = self.resample_nodes(coords, num_nodes)
-                print("Resampled Coords: ")
-                print(interp_array[0])
-                print(interp_array[-1])
+                print(coords)
+                resampled_points = self.resample_nodes(coords, num_nodes)
+                #print(resampled_points)
+                last_index = len(resampled_points) - 1
+                resampled_points = np.delete(resampled_points, last_index)
+                interp_array = np.concatenate((interp_array, resampled_points,), axis=0)
         else:
             coords = self.trimesh.vertices[boundary_nodes]
             coords = np.append(coords, [coords[0]], axis=0)
@@ -410,7 +417,7 @@ class STLMesh(Mesh):
             last_index = len(interp_array) - 1
             del interp_array[last_index]
 
-
+        print(interp_array)
         self.boundary.interpollation_coords = interp_array
         self.boundary.interpollation_num = num_nodes
         return interp_array
