@@ -386,35 +386,51 @@ class STLMesh(Mesh):
             for i, boundary_node in enumerate(boundary_nodes):
                 if boundary_node in self.boundary.corner_nodes:
                     indexes.append(i)
-            start_indexes = indexes.copy()
-            start_indexes.insert(0, 0)
-            end_indexes = indexes.copy()
-            end_indexes.append(-1)
-            limits = []
+            indexes.insert(0, 0)
+            indexes.append(-1)
+            coords_list = []
             for i in range(len(self.boundary.corner_nodes) + 1):
-                limits.append([start_indexes[i], end_indexes[i]])
-            for i, corner_node in enumerate(self.boundary.corner_nodes):
-                # TODO: Put here to run the resampling for the points between each corner.
-                pass
+                limit = [indexes[i], indexes[i+1]]
+                coords_list.append(self.trimesh.vertices[boundary_nodes[limit[0]:limit[1]]])
+            coords_list[-1] = np.append(coords_list[-1], coords_list[0], axis=0)
+            del coords_list[0]
+            interp_array = []
+            for coords in coords_list:
+                print("Original Coords: ")
+                print(coords[0])
+                print(coords[-1])
+                interp_array = self.resample_nodes(coords, num_nodes)
+                print("Resampled Coords: ")
+                print(interp_array[0])
+                print(interp_array[-1])
         else:
             coords = self.trimesh.vertices[boundary_nodes]
             coords = np.append(coords, [coords[0]], axis=0)
-            interp_array = self.resample_nodes(coords, num_nodes)
+            interp_array = self.resample_nodes(coords, num_nodes - 1)
+            last_index = len(interp_array) - 1
+            del interp_array[last_index]
+
 
         self.boundary.interpollation_coords = interp_array
         self.boundary.interpollation_num = num_nodes
         return interp_array
     
-    def resample_nodes(self, coords, num_nodes):
+    def resample_nodes(self, coords, num_nodes) -> np.ndarray:
         """
+        Returns a numpy array of num_nodes coordinates that are evenly
+        spaced along the path that is created by successively traversing
+        the list of coordinates in coords.
+        The first and last coordinates of coords remain in the same place
+        and are included in the returned array.
         coords is the array of coordinates of the nodes being resampled.
         num_interp is the number of points you want for the interpolation.
         """
         # Cumulative Euclidean distance between successive polygon points.
         # This will be the "x" for interpolation
         d = np.cumsum(np.r_[0, np.sqrt((np.diff(coords, axis=0) ** 2).sum(axis=1))])
+
         # get linearly spaced points along the cumulative Euclidean distance
-        d_sampled = np.linspace(0, d.max(), num_nodes + 1)
+        d_sampled = np.linspace(0, d.max(), num_nodes)
 
         # interpolate x and y coordinates
         interp_array = np.c_[
@@ -422,8 +438,7 @@ class STLMesh(Mesh):
             np.interp(d_sampled, d, coords[:, 1]),
             np.interp(d_sampled, d, coords[:, 2]),
         ]
-        last_index = len(interp_array) - 1
-        interp_array = np.delete(interp_array, last_index, axis=0)
+
         return interp_array
 
 
