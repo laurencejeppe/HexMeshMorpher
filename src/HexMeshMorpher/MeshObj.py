@@ -9,7 +9,7 @@ import os
 import fnmatch as fnm
 import numpy as np
 import trimesh as tr
-import pymeshlab as ml
+#import pymeshlab as ml
 from dataclasses import dataclass
 
 FOLDER = 'Geometry'
@@ -193,22 +193,22 @@ class STLMesh(Mesh):
         """
         self.save_trimesh_as_stl()
 
-        ms = ml.MeshSet()
-        ms.load_new_mesh(self.f_path)
-        ms.generate_polyline_from_planar_section(planeaxis=plane_axis,
-                                                 planeoffset=plane_offset,
-                                                 splitsurfacewithsection=True,
-                                                 customaxis=custom_axis)
+        #ms = ml.MeshSet()
+        #ms.load_new_mesh(self.f_path)
+        #ms.generate_polyline_from_planar_section(planeaxis=plane_axis,
+        #                                         planeoffset=plane_offset,
+        #                                         splitsurfacewithsection=True,
+        #                                         customaxis=custom_axis)
 
-        if polygon:
-            ms.set_current_mesh(1)
-            ms.save_current_mesh(self.path(self.f_name + 'Polygon', 'ply'),
-                                 binary=False)
+        #if polygon:
+        #    ms.set_current_mesh(1)
+        #    ms.save_current_mesh(self.path(self.f_name + 'Polygon', 'ply'),
+        #                         binary=False)
 
-        if section:
-            mesh_num = 2 if section == 1 else 3
-            ms.set_current_mesh(mesh_num)
-            ms.save_current_mesh(self.path(self.f_name + '_cut'))
+        #if section:
+        #    mesh_num = 2 if section == 1 else 3
+        #    ms.set_current_mesh(mesh_num)
+        #    ms.save_current_mesh(self.path(self.f_name + '_cut'))
 
     def get_boundary(self) -> np.ndarray:
         """Take a trimesh object as input and returns the coordinates of all the
