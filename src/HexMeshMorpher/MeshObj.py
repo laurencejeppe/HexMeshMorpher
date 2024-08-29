@@ -394,22 +394,20 @@ class STLMesh(Mesh):
                 if boundary_node in self.boundary.corner_nodes:
                     indexes.append(i)
             indexes.insert(0, 0)
-            indexes.append(-1)
+            indexes.append(-2)
             coords_list = []
             for i in range(len(self.boundary.corner_nodes) + 1):
                 limit = [indexes[i], indexes[i+1]]
-                print(limit)
                 coords_list.append(self.trimesh.vertices[boundary_nodes[limit[0]:limit[1]+1]])
             coords_list[-1] = np.append(coords_list[-1], coords_list[0], axis=0)
             del coords_list[0]
-            interp_array = np.array([])
+            interp_array = np.array([[None, None, None]])
             for coords in coords_list:
-                print(coords)
                 resampled_points = self.resample_nodes(coords, num_nodes)
-                #print(resampled_points)
                 last_index = len(resampled_points) - 1
-                resampled_points = np.delete(resampled_points, last_index)
+                resampled_points = np.delete(resampled_points, last_index, 0)
                 interp_array = np.concatenate((interp_array, resampled_points,), axis=0)
+            interp_array = np.delete(interp_array, 0, 0)
         else:
             coords = self.trimesh.vertices[boundary_nodes]
             coords = np.append(coords, [coords[0]], axis=0)
@@ -417,7 +415,6 @@ class STLMesh(Mesh):
             last_index = len(interp_array) - 1
             del interp_array[last_index]
 
-        print(interp_array)
         self.boundary.interpollation_coords = interp_array
         self.boundary.interpollation_num = num_nodes
         return interp_array
