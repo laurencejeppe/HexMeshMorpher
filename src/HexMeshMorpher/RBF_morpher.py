@@ -4,6 +4,7 @@ import time
 from multiprocessing import Process, Queue, Lock, Array
 import queue
 import numpy as np
+import os
 
 class RBFMorpher:
     """Class that handles the interpolation of the displacement field
@@ -14,7 +15,7 @@ class RBFMorpher:
                  displaced_mesh: MeshObj.STLMesh,
                  RBF,
                  use_multithread: bool=False,
-                 processors: int=4):
+                 processors: int=6):
 
         self.RBF = RBF
         self.use_multithread = use_multithread
@@ -73,9 +74,9 @@ class RBFMorpher:
 
         if self.use_multithread:
             lock = Lock()
-            displacement_x = Array('f', n_points, lock=lock)
-            displacement_y = Array('f', n_points, lock=lock)
-            displacement_z = Array('f', n_points, lock=lock)
+            displacement_x = Array('f', n_points)
+            displacement_y = Array('f', n_points)
+            displacement_z = Array('f', n_points)
             number_of_tasks = self.n
             number_of_processes = self.processors
             processes = []
@@ -90,7 +91,7 @@ class RBFMorpher:
                 if i*100 + 99 > number_of_tasks:
                     l = [ x for x in range(i*100, number_of_tasks)]
                 else:
-                    l = [ x for x in range(i*verts_per_process, verts_per_process*(i + 1) - 1)]
+                    l = [ x for x in range(i*verts_per_process, verts_per_process*(i + 1))]
                 tasks_to_do.put(l)
 
             print(f'{number_of_tasks} to be completed')
@@ -138,6 +139,7 @@ class RBFMorpher:
         while True:
             try:
                 task = tasks_to_do.get_nowait()
+                print(task)
 
                 if task == 'TERMINATE':
                     tasks_to_do.put(task)
@@ -146,10 +148,12 @@ class RBFMorpher:
                 disp = np.zeros((len(points), 3))
                 for vertex_index in task:
                     disp += self._disp_calculation(vertex_index, points)
+                print("Displacements Caculated for: ", os.getpid())
                 with lock:
                     displacement_x[:] = displacement_x[:] + disp[:,0]
                     displacement_y[:] = displacement_y[:] + disp[:,1]
                     displacement_z[:] = displacement_z[:] + disp[:,2]
+                print(f"Process {os.getpid} is finished.")
                 tasks_done.put(f'Task {int(task[0]/100)} is finished!')
             except queue.Empty():
                 break

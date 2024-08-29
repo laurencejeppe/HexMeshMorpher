@@ -758,9 +758,6 @@ class LandmarkFinder(QMainWindow):
         # TODO: Change layout parameters to allow for the window to be bigger
         # without messing up the look
 
-        # TODO: Add a signal for sending the edits that have been made to the
-        # mesh back to the main window.
-
     def evaluate_boundary(self):
         """ Evaluates the boundary of the mesh and stores these parameters
         in the .boundary."""
