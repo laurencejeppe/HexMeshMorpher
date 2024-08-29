@@ -277,6 +277,7 @@ class STLMesh(Mesh):
         assert set(sorted_nodes) == set(self.boundary.nodes), "Error in sorting nodes."
         self.boundary.nodes = sorted_nodes
         self.boundary.nodes_sorted = True
+        self.boundary.nodes = self.restarted_arranged_nodes()
         return sorted_nodes
 
     def get_boundary_faces(self) -> list:
@@ -332,8 +333,6 @@ class STLMesh(Mesh):
         starting_point is the first element and the subsequent nodes go around
         in a clockwise direction about the axis (rotation_axis).
         """
-        # TODO: change this to use corner nodes if they are present
-        # Start with the corner node that is closest to the starting point.
         if not self.boundary.nodes_sorted:
             self.arrange_boundary()
         if not starting_point:
@@ -371,13 +370,11 @@ class STLMesh(Mesh):
         assert set(new_indices) == set(indices), "Rearranging indices has failed"
         return new_indices
 
-    def resample_boundary_nodes(self, num_nodes, ccw_flag: bool=False):
+    def resample_boundary_nodes(self, num_nodes, ccw_flag: bool=False,
+                                ignore_corners: bool=False):
         """
         Interpolates the points around a polygon.
         """
-        # TODO: This needs to be redone such that the corner nodes are not
-        # affected by the resampling. i.e. between each corner resample, but
-        # corners should stay in the same places.
         if self.boundary.nodes is None:
             self.get_boundary()
         if not self.boundary.nodes_sorted:
@@ -387,8 +384,9 @@ class STLMesh(Mesh):
         coords = self.trimesh.vertices[boundary_nodes]
         coords = np.append(coords, [coords[0]], axis=0)
 
-        if self.boundary.corner_nodes:
+        if self.boundary.corner_nodes and not ignore_corners:
             # TODO: Adjust the nodes number to be representitive of the total number of nodes.
+            sub_num_nodes = int(num_nodes/len(self.boundary.corner_nodes))
             indexes = []
             for i, boundary_node in enumerate(boundary_nodes):
                 if boundary_node in self.boundary.corner_nodes:
@@ -403,7 +401,7 @@ class STLMesh(Mesh):
             del coords_list[0]
             interp_array = np.array([[None, None, None]])
             for coords in coords_list:
-                resampled_points = self.resample_nodes(coords, num_nodes)
+                resampled_points = self.resample_nodes(coords, sub_num_nodes + 1)
                 last_index = len(resampled_points) - 1
                 resampled_points = np.delete(resampled_points, last_index, 0)
                 interp_array = np.concatenate((interp_array, resampled_points,), axis=0)
@@ -701,7 +699,6 @@ class ParsingError(Exception):
         if message:
             self.message += f"\n{message}\n"
         super().__init__(self.message)
-
 
 if __name__ == "__main__":
     pass

@@ -544,7 +544,6 @@ with {source_vertex_count} boundary nodes on {target.f_name}")
         else:
             lpairs = []
 
-
         options = {
             'gamma':g,
             'epsilon':e,
