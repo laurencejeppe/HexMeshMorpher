@@ -39,6 +39,7 @@ class RBFMorpher:
     def generate_interpolation_matrix(self):
         """Generates inperpolation matrixs for transformation field."""
         start_time = time.time()
+        # TODO: Could parallelise this too?
         print("Generating Interpolation Matrix")
         for i in range(0, self.n):
             for j in range(0, self.n):
@@ -114,7 +115,7 @@ class RBFMorpher:
             # collecting results
             print('Getting output from processes')
             while not tasks_done.empty():
-                print(f'Processing {int(tasks_done.get())}!')
+                print(f'Processing {tasks_done.get()}!')
 
             displacements = [
                 [displacement_x[i], displacement_y[i], displacement_z[i]]
@@ -153,9 +154,9 @@ class RBFMorpher:
                     displacement_x[:] = displacement_x[:] + disp[:,0]
                     displacement_y[:] = displacement_y[:] + disp[:,1]
                     displacement_z[:] = displacement_z[:] + disp[:,2]
-                print(f"Process {os.getpid} is finished.")
+                print(f"Process {os.getpid()} is finished.")
                 tasks_done.put(f'Task {int(task[0]/100)} is finished!')
-            except queue.Empty():
+            except queue.Empty:
                 break
             else:
                 print(f'Task {int(task[0]/100)} is finished!')
