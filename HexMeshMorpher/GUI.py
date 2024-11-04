@@ -875,7 +875,7 @@ def show_message(message, message_type="err", title="An Error Occured..."):
 if __name__=="__main__":
     app = QApplication(sys.argv)
     win = MeshMorpherGUI()
-    with open("src/HexMeshMorpher/styles/styles.css", "r", encoding="utf-8") as file:
+    with open("HexMeshMorpher/styles/styles.css", "r", encoding="utf-8") as file:
         app.setStyleSheet(file.read())
     win.show()
     sys.exit(app.exec())
