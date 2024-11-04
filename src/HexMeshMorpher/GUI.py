@@ -679,6 +679,7 @@ class RBF_Morpher(QMainWindow):
         self.parent.files[result.f_name] = result
         self.parent.file_manager.addRow(result.f_name, result)
         self.parent.filesDrop.append(result.f_name)
+        # something
         self.close()
 
 class RBF_Thread(QThread):
