@@ -586,16 +586,6 @@ class AmbergThread(QThread):
         self.lpairs = lpairs
 
     def run(self):
-        #lpairs = [[1, [0.0625779, -0.0421632, 0.0119162]], # Top Left
-        #          [200, [-0.0636008, -0.0421502, 0.0119019]], # Top Right
-        #          [10101, [0.0461566, -0.113105, -0.00230067]], # Bottom Left
-        #          [10200, [-0.0484762, -0.113245, -0.00233835]]] # Bottom Right
-
-        #lpairs = [[1, [0.0625774, 0.037793, 0.111964]],
-        #          [200, [-0.0636172, 0.0377307, 0.111834]],
-        #          [10101, [0.0461407, -0.0332396, 0.0977013]],
-        #          [10200, [-0.0484672, -0.0332104, 0.0976772]]]
-
         AM = amberg_mapping.AmbergMapping(sourcey=self.source,
                                           targety=self.target,
                                           mappedy=self.output,
@@ -679,7 +669,6 @@ class RBF_Morpher(QMainWindow):
         self.parent.files[result.f_name] = result
         self.parent.file_manager.addRow(result.f_name, result)
         self.parent.filesDrop.append(result.f_name)
-        # something
         self.close()
 
 class RBF_Thread(QThread):
