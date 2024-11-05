@@ -274,8 +274,8 @@ class MeshMorpherGUI(QMainWindow):
             mesh_name = self.file_manager.table.item(row, 0).text()
         mesh = self.files[mesh_name]
         if not isinstance(mesh, MeshObj.STLMesh):
-            show_message(message="Landmark finder is currently only supported \
-                         for STL meshes!", title="Item Selection Error")
+            show_message(message="Landmark finder is currently only supported for STL meshes!",
+                         title="Item Selection Error")
             return
         self.landmark_finder = LandmarkFinder(mesh=mesh, parent=self)
         self.landmark_finder.show()
@@ -537,9 +537,10 @@ class Amberg_Mapping(QMainWindow):
                     ]
             else:
                 self.use_landmarks.setChecked(False)
-                show_message(message=f"Landmark pairs were selected, but no \
-suitable landmark pairs were found!\nRun landmark finder \
-with {source_vertex_count} boundary nodes on {target.f_name}")
+                landmark_error = ("Landmark pairs were selected, but no suitable "
+                                  "landmark pairs were found!\nRun langmark finder "
+                                  "with {} boundary nodes on {}")
+                show_message(message=landmark_error.format(source_vertex_count, target.f_name))
                 return
         else:
             lpairs = []
@@ -743,7 +744,7 @@ class LandmarkFinder(QMainWindow):
 
         self.main_widget.setLayout(self.main_layout)
 
-        self.resize(520,400)
+        #self.resize(520,400)
 
         # TODO: Change layout parameters to allow for the window to be bigger
         # without messing up the look
