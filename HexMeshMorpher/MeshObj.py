@@ -578,7 +578,7 @@ class INPMesh(Mesh):
             for node in self.nodes:
                 file.write(
                     f"{int(node[0]):>7},  {node[1]:>11},  {node[2]:>11},  "
-                    "{node[3]:>11}\n"
+                    f"{node[3]:>11}\n"
                     )
             file.write(f'{self.elem_head}\n')
 
