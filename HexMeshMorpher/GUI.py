@@ -16,6 +16,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QHeaderView, QDoubleSpinBox, QSpinBox,
                              QAbstractSpinBox, QStyle, QDialog, QProgressBar,
                              QTextEdit, QDialogButtonBox)
+
+import numpy as np
 import MeshObj
 import amberg_mapping
 import RBF_morpher
@@ -395,6 +397,9 @@ class Amberg_Mapping(QMainWindow):
         self.use_landmarks = QCheckBox()
         self.use_landmarks.setText("Use Landmarks")
         self.options_layout.addWidget(self.use_landmarks, 0, 1)
+        self.manual_landmark_selection_box = QCheckBox()
+        self.manual_landmark_selection_box.setText("Manual Landmark Selection")
+        self.options_layout.addWidget(self.manual_landmark_selection_box, 0, 2)
         self.epsilon_text = QLabel("Epsilon")
         self.options_layout.addWidget(self.epsilon_text, 1, 0)
         self.epsilon_edit = QDoubleSpinBox()
@@ -524,10 +529,19 @@ class Amberg_Mapping(QMainWindow):
         f = self.use_faces.isChecked()
         l = self.use_landmarks.isChecked()
 
-        if l:
-            source_vertex_count = len(source.get_boundary())
-            if target.boundary.interpollation_coords is not None and \
+        if l: # This shouldn't be the way of doing this, but it works for now
+            # You should have the option here of getting landmarks pairs from a file
+            if self.manual_landmark_selection_box.isChecked():
+                lpairs = self.manual_landmark_selection()
+                if lpairs is None:
+                    landmark_error = ("Landmark pairs were selected, but no suitable "
+                                  "landmark pairs were found in the file!\n")
+                    show_message(message=landmark_error)
+                    self.use_landmarks.setChecked(False)
+                    return
+            elif target.boundary.interpollation_coords is not None and \
                 target.boundary.interpollation_num == source_vertex_count:
+                source_vertex_count = len(source.get_boundary())
                 lpairs = [
                     [
                         source.boundary.nodes[i],
@@ -571,6 +585,23 @@ class Amberg_Mapping(QMainWindow):
         self.parent.file_manager.addRow(output_mesh.f_name, output_mesh)
         self.parent.filesDrop.append(output_mesh.f_name)
         self.close()
+
+    def manual_landmark_selection(self):
+        """ Opens a dialog to select the landmark pairs manually. """
+        fname = QFileDialog.getOpenFileName(self,
+                                            "Select Landmark Pairs File",
+                                            directory=self.WDIR,
+                                            filter="np.array (*.npy)")
+
+        if fname[0] == '':
+            return None
+        landmark_pairs = np.load(fname[0], allow_pickle=True)
+        lpairs = []
+        for i, pair in enumerate(landmark_pairs):
+            lpairs.append([int(pair[0]), [item for item in pair[1]]])
+
+        print(lpairs)
+        return lpairs
 
 class AmbergThread(QThread):
     taskFinished = pyqtSignal(object)
@@ -744,7 +775,7 @@ class LandmarkFinder(QMainWindow):
 
         self.main_widget.setLayout(self.main_layout)
 
-        #self.resize(520,400)
+        self.resize(520,400)
 
         # TODO: Change layout parameters to allow for the window to be bigger
         # without messing up the look
