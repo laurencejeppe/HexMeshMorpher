@@ -18,9 +18,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QTextEdit, QDialogButtonBox)
 
 import numpy as np
-import MeshObj
-import amberg_mapping
-import RBF_morpher
+from HexMeshMorpher import MeshObj, amberg_mapping, RBF_morpher
 
 
 class MeshMorpherGUI(QMainWindow):

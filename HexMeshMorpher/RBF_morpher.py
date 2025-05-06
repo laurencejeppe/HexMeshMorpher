@@ -1,5 +1,4 @@
-
-import MeshObj
+from HexMeshMorpher import MeshObj
 import time
 from multiprocessing import Process, Queue, Lock, Array
 import queue
