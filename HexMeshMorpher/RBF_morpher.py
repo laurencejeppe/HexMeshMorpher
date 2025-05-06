@@ -62,12 +62,15 @@ class RBFMorpher:
         print("Interpolation Matrix Loaded Successfully in "+str(time.time()-start_time)+"s")
 
     def generate_coefficient_matrix(self):
-        """Generates matrix of coefficients for the transfomoation field."""
+        """Generates matrix of coefficients for the transformation field."""
+        import time
         start_time = time.time()
         print("Generating Coefficient Matrix")
-        coeff_matrix = np.linalg.inv(self.interp_matrix)@self.source_v_disp
-        print(("Successfuly Generated Coefficient Matrix in "+str(time.time()-start_time)+"s"))
-        self.coeff_matrix = coeff_matrix
+
+        # Solve interp_matrix * X = source_v_disp for X
+        self.coeff_matrix = np.linalg.solve(self.interp_matrix, self.source_v_disp)
+
+        print("Successfully Generated Coefficient Matrix in {:.2f}s".format(time.time() - start_time))
 
     def calculate_displacements(self, points):
         """Calculates the individual displacements required by morph_vertices."""
