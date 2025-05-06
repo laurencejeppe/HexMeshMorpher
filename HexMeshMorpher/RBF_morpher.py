@@ -36,16 +36,19 @@ class RBFMorpher:
         return np.sqrt(vector.dot(vector))
 
     def generate_interpolation_matrix(self):
-        """Generates inperpolation matrixs for transformation field."""
+        """Generates interpolation matrix for transformation field."""
         start_time = time.time()
-        # TODO: Could parallelise this too?
         print("Generating Interpolation Matrix")
-        for i in range(0, self.n):
-            for j in range(0, self.n):
-                self.interp_matrix[i][j] \
-                    = self.RBF(self.__magnitude(self.original_source_vertices[i] \
-                                                - self.original_source_vertices[j]))
-        print("Successfuly Generated Interpolation Matrix in "+str(time.time()-start_time)+"s")
+
+        # Compute pairwise Euclidean distances in a vectorized way
+        V = self.original_source_vertices  # shape: (n, d)
+        diffs = V[:, np.newaxis, :] - V[np.newaxis, :, :]  # shape: (n, n, d)
+        distances = np.sqrt(np.sum(diffs ** 2, axis=-1))   # shape: (n, n)
+
+        # Apply RBF function element-wise to the distance matrix
+        self.interp_matrix = self.RBF(distances) # assumes RBF accepts ndarray input
+
+        print("Successfully Generated Interpolation Matrix in {:.2f}s".format(time.time() - start_time))
 
     def save_interpolation_matrix(self, file_name):
         """Saves inperpolation matrixs as a npy file."""
