@@ -1,4 +1,5 @@
-from HexMeshMorpher import MeshObj
+# -*- coding: utf-8 -*-
+from HexMeshMorpher.MeshObj import STLMesh
 import time
 from multiprocessing import Process, Queue, Lock, Array
 import queue
@@ -10,8 +11,8 @@ class RBFMorpher:
     defined by the mapping of some source nodes (vetices). The radial
     basis function (RBF) is hard-coded in this class, but that may be
     changed later."""
-    def __init__(self, original_mesh: MeshObj.STLMesh,
-                 displaced_mesh: MeshObj.STLMesh,
+    def __init__(self, original_mesh: STLMesh,
+                 displaced_mesh: STLMesh,
                  RBF,
                  use_multithread: bool=False,
                  processors: int=6):

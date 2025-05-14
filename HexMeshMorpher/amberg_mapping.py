@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Performs amberg non-rigid ICP on the trimesh objects of source and target
 objects are returns to the mapping in the mapped object which is returned.
@@ -5,7 +6,7 @@ objects are returns to the mapping in the mapped object which is returned.
 
 import time
 import trimesh as tr
-import MeshObj
+from HexMeshMorpher.MeshObj import STLMesh
 
 class AmbergMapping:
     """
@@ -13,8 +14,8 @@ class AmbergMapping:
     objects and returns to the mapping in the mapped object which is
     returned.
     """
-    def __init__(self, sourcey: MeshObj.STLMesh, targety: MeshObj.STLMesh,
-                 mappedy: MeshObj.STLMesh, lpairs: list=None,
+    def __init__(self, sourcey: STLMesh, targety: STLMesh,
+                 mappedy: STLMesh, lpairs: list=None,
                  steps: list=None, options=None) -> None:
         self.source = sourcey
         self.target = targety
@@ -88,7 +89,7 @@ class AmbergMapping:
             print("Amberg Mapping Completed in "+str(time.time()-start_time)+"s")
 
 
-    def find_vertex_index(self, mesh: MeshObj.STLMesh, vertex):
+    def find_vertex_index(self, mesh: STLMesh, vertex):
         """Finds the index of a vertex in the mesh [mesh_name] given its position."""
         for i, mesh_vertex in enumerate(mesh.trimesh.vertices):
             if (mesh_vertex == vertex).all():
