@@ -642,6 +642,8 @@ class RBF_Morpher(QMainWindow):
         self.files = parent.files
         self.WDIR = parent.WDIR
 
+        self.morpher: RBFMorpher = RBFMorpher(custom_RBF)
+
         self.main_layout = QVBoxLayout()
 
         # Selected file that has is unmapped
@@ -657,6 +659,19 @@ class RBF_Morpher(QMainWindow):
         self.mapped = QComboBox()
         self.mapped.addItems(self.parent.files)
         self.main_layout.addWidget(self.mapped)
+        # Button to generate the coefficient matrix
+        self.generate_coefficients_btn = QPushButton("Generate Coefficient Matrix")
+        self.generate_coefficients_btn.clicked.connect(self.generate_coefficients)
+        self.main_layout.addWidget(self.generate_coefficients_btn)
+        # Button to save the coefficient matrix
+        self.save_coefficients_btn = QPushButton("Save Coefficient Matrix")
+        self.save_coefficients_btn.clicked.connect(self.save_coefficients)
+        self.main_layout.addWidget(self.save_coefficients_btn)
+        # Button to load the coefficient matrix
+        self.load_coefficients_btn = QPushButton("Load Coefficient Matrix")
+        self.load_coefficients_btn.clicked.connect(self.load_coefficients)
+        self.main_layout.addWidget(self.load_coefficients_btn)
+
         # Selected file to be morphed
         self.morphee_text = QLabel("Morph This")
         self.main_layout.addWidget(self.morphee_text)
@@ -667,7 +682,7 @@ class RBF_Morpher(QMainWindow):
         self.use_multithread_check = QCheckBox("Use Multi-Thread RBF")
         self.main_layout.addWidget(self.use_multithread_check)
 
-        self.run_morph_btn = QPushButton("Run Amberg Mapping")
+        self.run_morph_btn = QPushButton("Run RBF Morphing")
         self.run_morph_btn.clicked.connect(self.initiate_morph)
         self.main_layout.addWidget(self.run_morph_btn)
 
@@ -679,22 +694,73 @@ class RBF_Morpher(QMainWindow):
 
         self.resize(520,400)
 
-    def initiate_morph(self):
-        if self.unmapped.count() < 3:
-            show_message(message="You need at least two meshes to perform an Amberg Mapping!",
+    def generate_coefficients(self):
+        """ Generates the coefficient matrix for the RBF morphing. """
+        if self.unmapped.count() < 2:
+            show_message(message="You need at least two meshes to generate a coefficient matrix!",
                          title="Mesh Error")
             return
+        
         unmapped: STLMesh = self.files[self.unmapped.currentText()]
         mapped: STLMesh = self.files[self.mapped.currentText()]
-        morphee: Mesh = self.files[self.morphee.currentText()]
+        self.morpher.set_original_mesh(unmapped)
+        self.morpher.set_displaced_mesh(mapped)
+        self.morpher.generate_interpolation_matrix()
+        self.morpher.generate_coefficient_matrix()
 
-        use_multithread = self.use_multithread_check.isChecked()
+    def save_coefficients(self):
+        """ Saves the coefficient matrix to a file. """
+        if self.morpher.coeff_matrix is None:
+            show_message(message="You need to generate the coefficient matrix first!",
+                         title="Coefficient Matrix Error")
+            return
+        fname = QFileDialog.getSaveFileName(self,
+                                            "Save Coefficient Matrix",
+                                            directory=self.WDIR,
+                                            filter="Coefficient Matrix (*.npy)")
+        if fname[0] == '':
+            show_message(message="Coefficient matrix has not been saved!",
+                         title="Coefficient Matrix Save Error")
+            return
+        self.morpher.save_coefficient_matrix(fname[0])
+
+    def load_coefficients(self):
+        """ Loads the coefficient matrix from a file. """
+        fname = QFileDialog.getOpenFileName(self,
+                                            "Load Coefficient Matrix",
+                                            directory=self.WDIR,
+                                            filter="Coefficient Matrix (*.npy)")
+        if fname[0] == '':
+            show_message(message="Coefficient matrix has not been loaded!",
+                         title="Coefficient Matrix Load Error")
+            return
+        try:
+            self.morpher.load_coefficient_matrix(fname[0])
+        except Exception as e:
+            show_message(message=f"Error loading coefficient matrix: {e}",
+                         title="Coefficient Matrix Load Error")
+            return
+
+    def initiate_morph(self):
+        if self.morpher.coeff_matrix is None:
+            show_message(message="You need to generate the coefficient matrix first!",
+                         title="Coefficient Matrix Error")
+            return
+        try:
+            morphee: Mesh = self.files[self.morphee.currentText()]
+        except KeyError:
+            show_message(message="Please select a mesh to morph!",
+                         title="Mesh Selection Error")
+            return
+        
+        if self.use_multithread_check.isChecked():
+            self.morpher.use_multithread = True
+        else:
+            self.morpher.use_multithread = False
 
         # Morph the nodes and replace them in the mesh objected
-        self.thread: RBF_Thread = RBF_Thread(unmapped=unmapped,
-                                             mapped=mapped,
+        self.thread: RBF_Thread = RBF_Thread(self.morpher,
                                              morphee=morphee,
-                                             use_multithread=use_multithread,
                                              callback=self.handle_result)
         self.progress_bar.setRange(0,0)
         self.thread.start()
@@ -713,23 +779,16 @@ class RBF_Thread(QThread):
     """ Thread for processing RBF tasks. """
     taskFinished = pyqtSignal(object)
 
-    def __init__(self, unmapped, mapped, morphee, use_multithread, callback,
+    def __init__(self, morpher:RBFMorpher, morphee: Mesh, callback,
                  parent=None):
         QThread.__init__(self, parent)
         self.taskFinished.connect(callback)
-        self.unmapped = unmapped
-        self.mapped = mapped
+        self.morpher = morpher
         self.morphee = morphee
-        self.use_multithread = use_multithread
 
     def run(self):
         """ Starts the thread. """
-        morpher: RBFMorpher \
-            = RBFMorpher(self.unmapped,
-                                     self.mapped,
-                                     custom_RBF,
-                                     use_multithread=self.use_multithread)
-        nodes = morpher.morph_vertices(self.morphee.nodes[:,1:])
+        nodes = self.morpher.morph_vertices(self.morphee.nodes[:,1:])
         self.morphee.update_nodes(nodes)
 
         self.taskFinished.emit(self.morphee)

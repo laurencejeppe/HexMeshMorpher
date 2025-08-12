@@ -11,9 +11,10 @@ class RBFMorpher:
     defined by the mapping of some source nodes (vetices). The radial
     basis function (RBF) is hard-coded in this class, but that may be
     changed later."""
-    def __init__(self, original_mesh: STLMesh,
-                 displaced_mesh: STLMesh,
+    def __init__(self,
                  RBF,
+                 original_mesh: STLMesh=None,
+                 displaced_mesh: STLMesh=None,
                  use_multithread: bool=False,
                  processors: int=6):
 
@@ -21,20 +22,30 @@ class RBFMorpher:
         self.use_multithread = use_multithread
         self.processors = processors
 
-        self.original_source_vertices = np.array(original_mesh.trimesh.vertices)
-        self.source_v_disp = np.array(displaced_mesh.trimesh.vertices)-self.original_source_vertices
-
-        self.n = len(self.original_source_vertices)
-
-        self.interp_matrix = np.zeros((self.n,self.n))
-
+        self.interp_matrix = None
         self.coeff_matrix = None
 
-        self.generate_interpolation_matrix()
-        self.generate_coefficient_matrix()
+        if original_mesh is not None:
+            self.set_original_mesh(original_mesh)
+        if displaced_mesh is not None:
+            self.set_displaced_mesh(displaced_mesh)
+        
+        if original_mesh is not None and displaced_mesh is not None:
+            self.generate_interpolation_matrix()
+            self.generate_coefficient_matrix()
 
     def __magnitude(self, vector):
         return np.sqrt(vector.dot(vector))
+    
+    def set_original_mesh(self, original_mesh: STLMesh):
+        """Sets the original mesh and its vertices."""
+        self.original_source_vertices = np.array(original_mesh.trimesh.vertices)
+        self.n = len(self.original_source_vertices)
+        self.interp_matrix = np.zeros((self.n,self.n))
+
+    def set_displaced_mesh(self, displaced_mesh: STLMesh):
+        """Sets the displaced mesh and its vertices."""
+        self.source_v_disp = np.array(displaced_mesh.trimesh.vertices) - self.original_source_vertices
 
     def generate_interpolation_matrix(self):
         """Generates interpolation matrix for transformation field."""
@@ -47,7 +58,7 @@ class RBFMorpher:
         distances = np.sqrt(np.sum(diffs ** 2, axis=-1))   # shape: (n, n)
 
         # Apply RBF function element-wise to the distance matrix
-        self.interp_matrix = self.RBF(distances) # assumes RBF accepts ndarray input
+        self.interp_matrix = distances #self.RBF(distances) # assumes RBF accepts ndarray input
 
         print("Successfully Generated Interpolation Matrix in {:.2f}s".format(time.time() - start_time))
 
@@ -72,6 +83,18 @@ class RBFMorpher:
         self.coeff_matrix = np.linalg.solve(self.interp_matrix, self.source_v_disp)
 
         print("Successfully Generated Coefficient Matrix in {:.2f}s".format(time.time() - start_time))
+
+    def save_coefficient_matrix(self, file_name):
+        """Saves coefficient matrix as a npy file."""
+        np.save(file_name, self.coeff_matrix)
+
+    def load_coefficient_matrix(self, file_name):
+        """Loads existing coefficient matrix for transformation field."""
+        start_time = time.time()
+        print("Loading Coefficient Matrix")
+        self.coeff_matrix = np.load(file_name)
+        self.n = self.coeff_matrix.shape[0]
+        print("Coefficient Matrix Loaded Successfully in "+str(time.time()-start_time)+"s")
 
     def calculate_displacements(self, points):
         """Calculates the individual displacements required by morph_vertices."""
