@@ -158,7 +158,7 @@ class RBFMorpher:
             # Non parallel calculation
             displacements = np.zeros((n_points, 3))
             for vertex_index in range(self.n):
-                displacements += self._disp_calculation(vertex_index, points)
+                displacements += self._disp_calculation_vectorized(vertex_index, points)
 
         print("Displacements Successfully Calculated in "+str(time.time()-start_time)+"s")
         return displacements
@@ -198,6 +198,15 @@ class RBFMorpher:
             source_vertex = self.original_source_vertices[vertex_index]
             diff_vec = point - source_vertex
             disps[i] = self.coeff_matrix[vertex_index] * self.RBF(self.__magnitude(diff_vec))
+        return disps
+    
+    def _disp_calculation_vectorized(self, vertex_index, points):
+        """Vectorized version of displacement calculation."""
+        source_vertex = self.original_source_vertices[vertex_index]
+        diff_vecs = points - source_vertex
+        magnitudes = np.linalg.norm(diff_vecs, axis=1)
+        rbf_vals = self.RBF(magnitudes)
+        disps = self.coeff_matrix[vertex_index] * rbf_vals[:, np.newaxis]
         return disps
 
     def morph_vertices(self, points):
