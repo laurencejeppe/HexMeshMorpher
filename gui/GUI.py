@@ -536,7 +536,6 @@ class Amberg_Mapping(QMainWindow):
 
         if l: # This shouldn't be the way of doing this, but it works for now
             # You should have the option here of getting landmarks pairs from a file
-            source_vertex_count = len(source.get_boundary())
             if self.manual_landmark_selection_box.isChecked():
                 lpairs = self.manual_landmark_selection()
                 if lpairs is None:
@@ -556,6 +555,7 @@ class Amberg_Mapping(QMainWindow):
                     for i in range(len(source.boundary.nodes))
                     ]
             else:
+                source_vertex_count = len(source.get_boundary())
                 self.use_landmarks.setChecked(False)
                 landmark_error = ("Landmark pairs were selected, but no suitable "
                                   "landmark pairs were found!\nRun langmark finder "
