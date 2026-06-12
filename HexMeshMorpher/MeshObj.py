@@ -534,14 +534,21 @@ class INPMesh(Mesh):
         index = starting_index
         elements = []
         more_elements = True
+        skip = 0
         while more_elements:
+            # The following combines lines that have been split in the inp file due to the 16 item limit. It checks if the line ends with a comma, if it does it combines
+            if data_list[index].strip().endswith(','):
+                data_list[index] = data_list[index].strip() + data_list[index+1].strip()
+                skip = 1
+            else:
+                skip = 0
             elements.append(data_list[index])
-            index += 1
+            index += 1 + skip
             try:
                 int(data_list[index].split(',')[0])
             except:
-                return elements, index-1
-        return elements, index-1
+                return elements, index-1-skip
+        return elements, index-1-skip
 
     def find_index(self, data_list, keyword_input):
         """ Finds the index if a keyword in a file list. """
