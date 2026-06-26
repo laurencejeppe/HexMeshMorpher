@@ -538,6 +538,7 @@ class Amberg_Mapping(QMainWindow):
 
         if l: # This shouldn't be the way of doing this, but it works for now
             # You should have the option here of getting landmarks pairs from a file
+            source_vertex_count = len(source.get_boundary())
             if self.manual_landmark_selection_box.isChecked():
                 lpairs = self.manual_landmark_selection()
                 if lpairs is None:
@@ -548,7 +549,8 @@ class Amberg_Mapping(QMainWindow):
                     return
             elif target.boundary.interpollation_coords is not None and \
                 target.boundary.interpollation_num == source_vertex_count:
-                source_vertex_count = len(source.get_boundary())
+                print(target.boundary.interpollation_coords)
+                #source_vertex_count = len(source.get_boundary())
                 lpairs = [
                     [
                         source.boundary.nodes[i],
@@ -557,10 +559,10 @@ class Amberg_Mapping(QMainWindow):
                     for i in range(len(source.boundary.nodes))
                     ]
             else:
-                source_vertex_count = len(source.get_boundary())
+                #source_vertex_count = len(source.get_boundary())
                 self.use_landmarks.setChecked(False)
                 landmark_error = ("Landmark pairs were selected, but no suitable "
-                                  "landmark pairs were found!\nRun langmark finder "
+                                  "landmark pairs were found!\nRun landmark finder "
                                   "with {} boundary nodes on {}")
                 show_message(message=landmark_error.format(source_vertex_count, target.f_name))
                 return
@@ -824,17 +826,19 @@ class LandmarkFinder(QMainWindow):
         self.evaluate_boundary_btn = QPushButton("Evaluate Mesh Boundary")
         self.evaluate_boundary_btn.clicked.connect(self.evaluate_boundary)
         self.button_layout.addWidget(self.evaluate_boundary_btn)
-        self.resample_boundary_btn = QPushButton("Resmple Mesh Boundary")
-        self.resample_boundary_btn.clicked.connect(self.resample_boundary_nodes)
-        self.button_layout.addWidget(self.resample_boundary_btn)
         self.num_nodes_label = QLabel("Number of Resampled Nodes")
         self.button_layout.addWidget(self.num_nodes_label)
         self.num_nodes_selector = QSpinBox()
         self.num_nodes_selector.setRange(1, 1000)
-        self.num_nodes_selector.setValue(76)        
+        self.num_nodes_selector.setValue(76)
         self.button_layout.addWidget(self.num_nodes_selector)
         self.ccw_flag = QCheckBox("Counter-Clockwise Resampling")
         self.button_layout.addWidget(self.ccw_flag)
+        self.ignore_corners_flag = QCheckBox("Ignore Corners")
+        self.button_layout.addWidget(self.ignore_corners_flag)
+        self.resample_boundary_btn = QPushButton("Resmple Mesh Boundary")
+        self.resample_boundary_btn.clicked.connect(self.resample_boundary_nodes)
+        self.button_layout.addWidget(self.resample_boundary_btn)
         self.button_layout.addStretch()
 
         self.main_layout.addLayout(self.button_layout, 1, 1)
@@ -863,7 +867,9 @@ class LandmarkFinder(QMainWindow):
     def resample_boundary_nodes(self):
         """ Resamples the boundary nodes to a given node count. """
         num_nodes = self.num_nodes_selector.value()
-        self.mesh.resample_boundary_nodes(num_nodes, ccw_flag=self.ccw_flag.isChecked())
+        self.mesh.resample_boundary_nodes(num_nodes,
+                                          ccw_flag=self.ccw_flag.isChecked(),
+                                          ignore_corners=self.ignore_corners_flag.isChecked())
         self.update_info_box(f"Mesh boundary has been resampled to give \
                              coordinates of {num_nodes}.")
 
