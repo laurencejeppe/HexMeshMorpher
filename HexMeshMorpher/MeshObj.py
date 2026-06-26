@@ -177,7 +177,7 @@ class STLMesh(Mesh):
         self.boundary.is_watertight = self.trimesh.is_watertight
         self.boundary.num_nodes = len(self.boundary.nodes)
         self.get_boundary_faces()
-        self.get_corners(angle_threshold=140.0)
+        self.get_corners(angle_threshold=130.0)
         return self.boundary.nodes
 
     def arrange_boundary(self) -> None:
@@ -240,7 +240,7 @@ class STLMesh(Mesh):
         self.boundary.faces = boundary_faces
         return boundary_faces
 
-    def get_corners(self, angle_threshold: float = 140.0) -> list:
+    def get_corners(self, angle_threshold: float = 130.0) -> list:
         """
         Finds all the corners of a mesh defined by a certain angle threshold.
         """
@@ -370,15 +370,15 @@ class STLMesh(Mesh):
                     (interp_array, resampled_points,),
                     axis=0
                     )
-            interp_array = np.delete(interp_array, 0, 0)
+
         else:
             coords = self.trimesh.vertices[boundary_nodes]
             coords = np.append(coords, [coords[0]], axis=0)
-            interp_array = self.resample_nodes(coords, num_nodes - 1)
+            interp_array = self.resample_nodes(coords, num_nodes + 1)
             last_index = len(interp_array) - 1
-            del interp_array[last_index]
+            print(len(interp_array))
 
-        self.boundary.interpollation_coords = interp_array
+        self.boundary.interpollation_coords = interp_array[:-1]
         self.boundary.interpollation_num = num_nodes
         return interp_array
 
