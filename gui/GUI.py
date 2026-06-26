@@ -176,7 +176,7 @@ class MeshMorpherGUI(QMainWindow):
                 typestring_list.append(inp_string)
             if stl:
                 typestring_list.append(stl_string)
-            ';; '.join(typestring_list)
+            typestring = ';; '.join(typestring_list)
 
         fname = self.chooseOpenFile(typestring)
 
@@ -318,6 +318,8 @@ class Mesh_Options_Dialog(QDialog):
             checkbox_string = "Convert mm to m"
         elif self.mesh.units == "m":
             checkbox_string = "Convert m to mm"
+        else:
+            checkbox_string = "Issue with Unit Detection"
         self.unit_change_check_box.setText(checkbox_string)
         self.main_layout.addWidget(self.unit_change_check_box)
 
