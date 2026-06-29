@@ -23,6 +23,7 @@ class RBFMorpher:
         self.use_multithread = use_multithread
         self.use_vectorised = use_vectorised
         self.processors = processors
+        self.tasks_per_packet = 1000
 
         self.interp_matrix = None
         self.coeff_matrix = None
@@ -117,13 +118,14 @@ class RBFMorpher:
             tasks_to_do = Queue()
             tasks_done = Queue()
 
-            verts_per_process = 100
             print('Creating Task List')
-            for i in range(int(np.ceil(number_of_tasks/100))):
-                if i*100 + 99 > number_of_tasks:
-                    l = [ x for x in range(i*100, number_of_tasks)]
+            for i in range(int(np.ceil(number_of_tasks/self.tasks_per_packet))):
+                if self.tasks_per_packet*(i + 1) - 1 > number_of_tasks:
+                    # To account for the last process where the number of tasks in the process is smaller 
+                    l = [ x for x in range(i*self.tasks_per_packet, number_of_tasks)]
                 else:
-                    l = [ x for x in range(i*verts_per_process, verts_per_process*(i + 1))]
+                    l = [ x for x in range(i*self.tasks_per_packet, self.tasks_per_packet*(i + 1))]
+                print(f'Task packet {i} tasks {l[0]} to {l[-1]}')
                 tasks_to_do.put(l)
 
             print(f'{number_of_tasks} to be completed')
@@ -146,7 +148,8 @@ class RBFMorpher:
             # collecting results
             print('Getting output from processes')
             while not tasks_done.empty():
-                print(f'Processing {tasks_done.get()}!')
+                #print(f'Finished {tasks_done.get()}!')
+                tasks_done.get()
 
             displacements = [
                 [displacement_x[i], displacement_y[i], displacement_z[i]]
@@ -182,29 +185,29 @@ class RBFMorpher:
         while True:
             try:
                 task = tasks_to_do.get_nowait()
-                print(task)
+                # print(task)
 
                 if task == 'TERMINATE':
                     tasks_to_do.put(task)
                     break
 
                 disp = np.zeros((len(points), 3))
+                print("Displacement Caculating for: ", os.getpid())
                 for vertex_index in task:
-                    if self.use_vectorised_disp_calc:
+                    if self.use_vectorised:
                         disp += self._disp_calculation_vectorized(vertex_index, points)
                     else:
                         disp += self._disp_calculation(vertex_index, points)
-                print("Displacements Caculated for: ", os.getpid())
                 with lock:
                     displacement_x[:] = displacement_x[:] + disp[:,0]
                     displacement_y[:] = displacement_y[:] + disp[:,1]
                     displacement_z[:] = displacement_z[:] + disp[:,2]
                 print(f"Process {os.getpid()} is finished.")
-                tasks_done.put(f'Task {int(task[0]/100)} is finished!')
+                tasks_done.put(f'Task packet {int(task[0]/self.tasks_per_packet)}')
             except queue.Empty:
                 break
             else:
-                print(f'Task {int(task[0]/100)} is finished!')
+                print(f'Task packet {int(task[0]/self.tasks_per_packet)} is finished!')
                 time.sleep(.5)
         return True
 

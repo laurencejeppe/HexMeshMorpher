@@ -689,7 +689,7 @@ class RBF_Morpher(QMainWindow):
         self.use_vectorised_displacement_calc = QCheckBox("Use Vectorised Displacement")
         self.use_vectorised_displacement_calc.setChecked(True)
         self.morph_option_box.addWidget(self.use_vectorised_displacement_calc)
-        self.main_layout.addWidget(self.morph_option_box)
+        self.main_layout.addLayout(self.morph_option_box)
 
         self.run_morph_btn = QPushButton("Run RBF Morphing")
         self.run_morph_btn.clicked.connect(self.initiate_morph)
