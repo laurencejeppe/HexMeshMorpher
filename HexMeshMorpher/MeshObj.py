@@ -386,8 +386,10 @@ class STLMesh(Mesh):
             last_index = len(interp_array) - 1
 
         self.boundary.interpollation_coords = interp_array[:-1]
+        # You should only do this if your edge is very close to the value your a fixing it as.
+        # self.boundary.interpollation_coords[:,1] = 360 # This offsets all the landmark coords at the boundary to a specific value. It assumes this is in the zx-plane so fixes y values.
         self.boundary.interpollation_num = num_nodes
-        return interp_array
+        return self.boundary.interpollation_coords
 
     def resample_nodes(self, coords, num_nodes) -> np.ndarray:
         """
