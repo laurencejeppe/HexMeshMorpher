@@ -549,7 +549,7 @@ class Amberg_Mapping(QMainWindow):
                     return
             elif target.boundary.interpollation_coords is not None and \
                 target.boundary.interpollation_num == source_vertex_count:
-                print(target.boundary.interpollation_coords)
+                # print(target.boundary.interpollation_coords)
                 #source_vertex_count = len(source.get_boundary())
                 lpairs = [
                     [
@@ -683,8 +683,13 @@ class RBF_Morpher(QMainWindow):
         self.morphee.addItems(self.parent.files)
         self.main_layout.addWidget(self.morphee)
 
+        self.morph_option_box = QHBoxLayout()
         self.use_multithread_check = QCheckBox("Use Multi-Thread RBF")
-        self.main_layout.addWidget(self.use_multithread_check)
+        self.morph_option_box.addWidget(self.use_multithread_check)
+        self.use_vectorised_displacement_calc = QCheckBox("Use Vectorised Displacement")
+        self.use_vectorised_displacement_calc.setChecked(True)
+        self.morph_option_box.addWidget(self.use_vectorised_displacement_calc)
+        self.main_layout.addWidget(self.morph_option_box)
 
         self.run_morph_btn = QPushButton("Run RBF Morphing")
         self.run_morph_btn.clicked.connect(self.initiate_morph)
@@ -761,6 +766,11 @@ class RBF_Morpher(QMainWindow):
             self.morpher.use_multithread = True
         else:
             self.morpher.use_multithread = False
+
+        if self.use_vectorised_displacement_calc.isChecked():
+            self.morpher.use_vectorised = True
+        else:
+            self.morpher.use_vectorised = False
 
         # Morph the nodes and replace them in the mesh objected
         self.thread: RBF_Thread = RBF_Thread(self.morpher,

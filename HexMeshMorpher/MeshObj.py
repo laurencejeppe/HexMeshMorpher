@@ -384,7 +384,6 @@ class STLMesh(Mesh):
             coords = np.append(coords, [coords[0]], axis=0)
             interp_array = self.resample_nodes(coords, num_nodes + 1)
             last_index = len(interp_array) - 1
-            print(len(interp_array))
 
         self.boundary.interpollation_coords = interp_array[:-1]
         self.boundary.interpollation_num = num_nodes
