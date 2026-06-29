@@ -16,10 +16,12 @@ class RBFMorpher:
                  original_mesh: STLMesh=None,
                  displaced_mesh: STLMesh=None,
                  use_multithread: bool=False,
+                 use_vectorised: bool=True,
                  processors: int=6):
 
         self.RBF = RBF
         self.use_multithread = use_multithread
+        self.use_vectorised = use_vectorised
         self.processors = processors
 
         self.interp_matrix = None
@@ -153,6 +155,17 @@ class RBFMorpher:
 
             print("Displacements Successfully Calculated in "+str(time.time()-start_time)+"s")
             return displacements
+        
+        elif self.use_vectorised:
+            # Non parallel calculation (fully vectorized)
+            # points: (m,3), original_source_vertices V: (n,3)
+            V = self.original_source_vertices
+            # compute pairwise distances between each point and each source vertex -> (m, n)
+            diffs = points[:, np.newaxis, :] - V[np.newaxis, :, :]  # (m, n, 3)
+            magnitudes = np.linalg.norm(diffs, axis=2)  # (m, n)
+            rbf_vals = self.RBF(magnitudes)  # (m, n)
+            # coeff_matrix: (n, 3); displacements for each point: (m, n) dot (n, 3) -> (m, 3)
+            displacements = rbf_vals.dot(self.coeff_matrix)
 
         else:
             # Non parallel calculation
@@ -177,7 +190,10 @@ class RBFMorpher:
 
                 disp = np.zeros((len(points), 3))
                 for vertex_index in task:
-                    disp += self._disp_calculation(vertex_index, points)
+                    if self.use_vectorised_disp_calc:
+                        disp += self._disp_calculation_vectorized(vertex_index, points)
+                    else:
+                        disp += self._disp_calculation(vertex_index, points)
                 print("Displacements Caculated for: ", os.getpid())
                 with lock:
                     displacement_x[:] = displacement_x[:] + disp[:,0]
