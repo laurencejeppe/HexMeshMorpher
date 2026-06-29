@@ -311,6 +311,9 @@ class STLMesh(Mesh):
             distances = np.linalg.norm(corner_coords - starting_point, axis=1)
             node_num = self.boundary.corner_nodes[np.argmin(distances)]
         else:
+            # TODO: If you want to make this a point on the yz-plane you should
+            #  - find the nodes with the smallest magnitude negative and positive z values that also have positive x value
+
             # Calculate the distances from the start point to each of the
             # boundary nodes
             distances = np.linalg.norm(coords - starting_point, axis=1)
