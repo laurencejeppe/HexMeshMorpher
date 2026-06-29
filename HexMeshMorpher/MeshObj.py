@@ -45,6 +45,7 @@ class Mesh():
         self.num_elements: int = None
         self.boundary: Boundary = Boundary()
         self.units: str = None
+        self.unit_factor = 1.0
 
         self.nodes: np.ndarray = None
 
@@ -65,6 +66,12 @@ class Mesh():
 
     def set_units(self, units: str):
         self.units = units
+        if self.units == 'mm':
+            self.unit_factor = 1000.0
+        elif self.units == 'm':
+            self.unit_factor = 1.0
+        else:
+            self.unit_factor = 1.0
 
 # If you want rotation matrices use
 # trimesh.transformations.rotation_matrix(angle, direction, point=None)
@@ -96,10 +103,11 @@ class STLMesh(Mesh):
         self.num_elements = len(self.trimesh.faces)
         x1 = np.max(self.trimesh.vertices[:][0])
         x2 = np.min(self.trimesh.vertices[:][0])
+        # Not very good way of doing this assumes meters if the mesh is smaller than one in its width in the x axis and otherwise assumes millimeters
         if abs(x1 - x2) > 1:
-            self.units = "mm"
+            self.set_units("mm")
         else:
-            self.units = "m"
+            self.set_units("m")
 
     def update_nodes(self, nodes):
         for i, node in enumerate(nodes):
@@ -288,7 +296,7 @@ class STLMesh(Mesh):
         if not self.boundary.nodes_sorted:
             self.arrange_boundary()
         if not starting_point:
-            starting_point = np.array([0.0, 0.0, -1.0])
+            starting_point = np.array([1.0*self.unit_factor, 0.0, 0.0])
         if not rotational_axis:
             rotational_axis = np.array([0.0, 1.0, 0.0])
         if ccw_flag:
@@ -413,7 +421,7 @@ class STLMesh(Mesh):
     def change_units(self, factor, units):
         """ Changes the units of a mesh by a given factor. """
         self.trimesh.apply_scale(factor)
-        self.units = units
+        self.set_units(units)
 
     def get_bounding_box(self) -> list:
         """
@@ -514,10 +522,11 @@ class INPMesh(Mesh):
 
         x1 = np.max(self.nodes[:, 1])
         x2 = np.min(self.nodes[:, 1])
+        # Not very good way of doing this assumes meters if the mesh is smaller than one in its width in the x axis and otherwise assumes millimeters
         if abs(x1 - x2) > 1:
-            self.units = "mm"
+            self.set_units("mm")
         else:
-            self.units = "m"
+            self.set_units("m")
 
     def update_nodes(self, nodes):
         for i, node in enumerate(nodes):
@@ -527,7 +536,7 @@ class INPMesh(Mesh):
     def change_units(self, factor, units):
         for i, node in enumerate(self.nodes):
             self.nodes[i][1:] = node[1:]*factor
-        self.units = units
+        self.set_units(units)
 
     def find_elements(self, starting_index, data_list):
         """Finds the number of elements in the inp file. """
