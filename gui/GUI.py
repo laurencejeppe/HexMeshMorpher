@@ -855,7 +855,7 @@ class LandmarkFinder(QMainWindow):
         """ Evaluates the boundary of the mesh and stores these parameters
         in the .boundary."""
         self.mesh.get_boundary()
-        boundary_nodes = self.mesh.restarted_arranged_nodes(starting_point=[1.0, 1.0, 1.0])
+        boundary_nodes = self.mesh.restarted_arranged_nodes()#starting_point=[1.0, 1.0, 1.0])
         self.update_info_box("The mesh boundary has been evaluated:")
         self.update_info_box(f"\tDetected {len(self.mesh.boundary.nodes)} boundary nodes!")
         self.update_info_box(f"\tDetected {len(self.mesh.boundary.edges)} boundary edges!")
