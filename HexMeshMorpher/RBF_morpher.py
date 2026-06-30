@@ -19,6 +19,14 @@ class RBFMorpher:
                  use_vectorised: bool=True,
                  processors: int=6):
 
+        if (
+            callable(displaced_mesh)
+            and original_mesh is not None
+            and hasattr(RBF, 'trimesh')
+            and hasattr(original_mesh, 'trimesh')
+        ):
+            RBF, original_mesh, displaced_mesh = displaced_mesh, RBF, original_mesh
+
         self.RBF = RBF
         self.use_multithread = use_multithread
         self.use_vectorised = use_vectorised
@@ -61,7 +69,7 @@ class RBFMorpher:
         distances = np.sqrt(np.sum(diffs ** 2, axis=-1))   # shape: (n, n)
 
         # Apply RBF function element-wise to the distance matrix
-        self.interp_matrix = distances #self.RBF(distances) # assumes RBF accepts ndarray input
+        self.interp_matrix = self.RBF(distances)
 
         print("Successfully Generated Interpolation Matrix in {:.2f}s".format(time.time() - start_time))
 
