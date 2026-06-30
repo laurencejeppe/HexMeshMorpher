@@ -166,6 +166,11 @@ class MeshMorpherGUI(QMainWindow):
             self.files[item].save_mesh(file_path=f_path)
             
     def load_mesh_dialog(self, stl=False, inp=False):
+        """
+        Loads inp or stl mesh to a Mesh Object as TriMesh or INPMesh.
+        """
+        # TODO: Add implimentation of loading more than just stl meshes with TriMesh
+        # TriMesh should be able to support different mesh types through the implimentation of trimesh
         stl_string = "MESH (*.stl)"
         inp_string = "ABAQUS (*.inp)"
         typestring_list = []

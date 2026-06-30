@@ -66,6 +66,12 @@ class Mesh(ABC):
         self.f_path = self.path()
 
     def set_units(self, units: str):
+        """
+        Changes the string describing the units.
+        Changes the unit_factor which determines scaling on various aspects including:
+         - the position of the start point used to define automatic landmark detection.
+         - can also be used to define view port detection
+         - can be used to name files with the units"""
         self.units = units
         if self.units == 'mm':
             self.unit_factor = 1000.0
@@ -77,6 +83,15 @@ class Mesh(ABC):
     @abstractmethod
     def load_mesh(self) -> None:
         raise NotImplementedError
+    
+    def change_units(self, factor, units: str) -> None:
+        self._do_change_units(factor)
+        self.set_units(units)
+
+    @abstractmethod
+    def _do_change_units(self, factor) -> None:
+        raise NotImplementedError
+
 
 # If you want rotation matrices use
 # trimesh.transformations.rotation_matrix(angle, direction, point=None)
@@ -93,13 +108,14 @@ class TriMesh(Mesh):
             name: str,
             f_name: str,
             f_folder: str,
+            f_type: str='stl',
             description: str = None,
             load: bool = True
         ) -> None:
         super().__init__(
             name=name,
             f_name=f_name,
-            f_type='stl',
+            f_type=f_type,
             f_folder=f_folder,
             description=description
         )
@@ -173,7 +189,7 @@ class TriMesh(Mesh):
         self.trimesh.apply_transform(t_matrix)
 
     def copy_mesh(self, new_name: str, new_f_name: str,
-                  new_description: str = None):
+                  new_description: str = None) -> TriMesh:
         """Returns a new STMesh object with the same trimesh"""
         mesh = TriMesh(new_name, new_f_name, self.f_folder, new_description,
                        load=False)
@@ -442,10 +458,9 @@ class TriMesh(Mesh):
 
         return interp_array
 
-    def change_units(self, factor, units):
+    def _do_change_units(self, factor):
         """ Changes the units of a mesh by a given factor. """
         self.trimesh.apply_scale(factor)
-        self.set_units(units)
 
     def get_bounding_box(self) -> list:
         """
@@ -570,10 +585,9 @@ class INPMesh(Mesh):
             for j, coord in enumerate(node):
                 self.nodes[i, j+1] = coord
 
-    def change_units(self, factor, units):
+    def _do_change_units(self, factor):
         for i, node in enumerate(self.nodes):
             self.nodes[i][1:] = node[1:]*factor
-        self.set_units(units)
 
     def find_elements(self, starting_index, data_list):
         """Finds the number of elements in the inp file. """
@@ -721,21 +735,6 @@ class INPMesh(Mesh):
         centroid = [(maximums[i] + minimums[i])/2 for i in range(3)]
         difference = [maximums[i] - minimums[i] for i in range(3)]
         return centroid, difference, maximums, minimums
-
-
-def cut_meshes(meshes: list[TriMesh],
-               offset: float = 0.210,
-               norm_vect: tuple = (-0.3545, 0.9166, 0.0)) -> list[TriMesh]:
-    """
-    Cuts all the meshes within the list meshes, of MeshObj objects (meshes)
-    and cuts them off acocrding to the offset and norm_vect parameters where
-    offset is the distance from the origin and norm_vect is the vector that
-    is normal to the cutting plane.
-    """
-    raise Exception(
-        "Sorry, I have taken out all functionality support the cropping of "
-        "meshes"
-        )
 
 
 class ParsingError(Exception):
