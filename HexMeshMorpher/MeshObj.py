@@ -10,6 +10,7 @@ import fnmatch as fnm
 import numpy as np
 import trimesh as tr
 from dataclasses import dataclass
+from abc import ABC, abstractmethod
 
 FOLDER = 'Geometry'
 
@@ -30,7 +31,7 @@ class Boundary():
     interpollation_num: np.ndarray = None
 
 
-class Mesh():
+class Mesh(ABC):
     """Class for containing all the information common between meshes"""
 
     def __init__(self, name: str, f_name: str, f_type: str, f_folder: str,
@@ -73,6 +74,10 @@ class Mesh():
         else:
             self.unit_factor = 1.0
 
+    @abstractmethod
+    def load_mesh(self) -> None:
+        raise NotImplementedError
+
 # If you want rotation matrices use
 # trimesh.transformations.rotation_matrix(angle, direction, point=None)
 
@@ -83,14 +88,29 @@ class Mesh():
 class TriMesh(Mesh):
     """Class for defining file names and locations where they are saved"""
 
-    def __init__(self, name: str, f_name: str, f_folder: str,
-                 description: str = None, load: bool = True) -> None:
-        Mesh.__init__(self, name, f_name, 'stl', f_folder, description)
+    def __init__(
+            self,
+            name: str,
+            f_name: str,
+            f_folder: str,
+            description: str = None,
+            load: bool = True
+        ) -> None:
+        super().__init__(
+            name=name,
+            f_name=f_name,
+            f_type='stl',
+            f_folder=f_folder,
+            description=description
+        )
 
         self.trimesh = None
 
         if load:
-            self.load_stl()
+            self.load_mesh()
+
+    def load_mesh(self):
+        self.load_stl()
 
     def load_stl(self) -> None:
         """Loads STL file as trimesh object."""
@@ -450,10 +470,20 @@ class INPMesh(Mesh):
     saving the editted inp file with those edits.
     """
 
-    def __init__(self, name: str, f_name: str, f_folder: str,
-                 description: str = None):
-        Mesh.__init__(self, name=name, f_name=f_name, f_type='inp',
-                      f_folder=f_folder, description=description)
+    def __init__(
+            self,
+            name: str,
+            f_name: str,
+            f_folder: str,
+            description: str = None
+        ) -> None:
+        super().__init__(
+            name=name,
+            f_name=f_name,
+            f_type='inp',
+            f_folder=f_folder,
+            description=description
+        )
         # Set stl path
         self.stl_path = self.path(file_type='stl')
 
@@ -471,6 +501,9 @@ class INPMesh(Mesh):
         self.num_boundary_nodes = None
         self.boundary_nodes_path = None
 
+        self.load_mesh()
+
+    def load_mesh(self):
         self.read_inp()
 
     def read_inp(self):
