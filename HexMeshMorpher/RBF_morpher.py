@@ -19,14 +19,6 @@ class RBFMorpher:
                  use_vectorised: bool=True,
                  processors: int=6):
 
-        if (
-            callable(displaced_mesh)
-            and original_mesh is not None
-            and hasattr(RBF, 'trimesh')
-            and hasattr(original_mesh, 'trimesh')
-        ):
-            RBF, original_mesh, displaced_mesh = displaced_mesh, RBF, original_mesh
-
         self.RBF = RBF
         self.use_multithread = use_multithread
         self.use_vectorised = use_vectorised

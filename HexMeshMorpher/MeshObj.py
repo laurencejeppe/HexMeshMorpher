@@ -85,11 +85,11 @@ class Mesh(ABC):
         raise NotImplementedError
     
     def change_units(self, factor, units: str) -> None:
-        self._do_change_units(factor)
+        self.scale_mesh(factor)
         self.set_units(units)
 
     @abstractmethod
-    def _do_change_units(self, factor) -> None:
+    def scale_mesh(self, factor) -> None:
         raise NotImplementedError
     
     @staticmethod
@@ -459,8 +459,8 @@ class TriMesh(Mesh):
 
         return interp_array
 
-    def _do_change_units(self, factor):
-        """ Changes the units of a mesh by a given factor. """
+    def scale_mesh(self, factor):
+        """ Scales the mesh by a given factor. """
         self.trimesh.apply_scale(factor)
 
     def get_bounding_box(self) -> list:
@@ -586,7 +586,10 @@ class INPMesh(Mesh):
             for j, coord in enumerate(node):
                 self.nodes[i, j+1] = coord
 
-    def _do_change_units(self, factor):
+    def scale_mesh(self, factor):
+        """ Scales the mesh by a given factor.
+        Mostly used to change the units.
+        """
         for i, node in enumerate(self.nodes):
             self.nodes[i][1:] = node[1:]*factor
 
@@ -736,11 +739,6 @@ class INPMesh(Mesh):
         centroid = [(maximums[i] + minimums[i])/2 for i in range(3)]
         difference = [maximums[i] - minimums[i] for i in range(3)]
         return centroid, difference, maximums, minimums
-    
-
-def something():
-    pass
-
 
 class ParsingError(Exception):
     """Errer message for reading data from inp or stl files."""
