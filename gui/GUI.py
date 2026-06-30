@@ -30,7 +30,7 @@ from HexMeshMorpher.RBF_morpher import (
 
 class MeshMorpherGUI(QMainWindow):
     def __init__(self):
-        super(MeshMorpherGUI,self).__init__()
+        super().__init__()
 
         self.setWindowTitle("MeshMorphPy")
 
@@ -295,7 +295,7 @@ class MeshMorpherGUI(QMainWindow):
 
 class Mesh_Options_Dialog(QDialog):
     def __init__(self, mesh:Mesh, parent = None):
-        super(Mesh_Options_Dialog, self).__init__(parent)
+        super().__init__(parent)
 
         self.mesh = mesh
 
@@ -365,7 +365,7 @@ class Mesh_Options_Dialog(QDialog):
 
 class Amberg_Mapping(QMainWindow):
     def __init__(self, parent = None):
-        super(Amberg_Mapping, self).__init__(parent)
+        super().__init__(parent)
         self.setWindowTitle("Amberg Mapping")
         self.main_widget = QWidget()
         self.setCentralWidget(self.main_widget)
@@ -643,7 +643,7 @@ class AmbergThread(QThread):
 
 class RBF_Morpher(QMainWindow):
     def __init__(self, parent = None):
-        super(RBF_Morpher, self).__init__(parent)
+        super().__init__(parent)
         self.setWindowTitle("RBF Morphing")
         self.mainWidget = QWidget()
         self.setCentralWidget(self.mainWidget)
@@ -820,7 +820,7 @@ class LandmarkFinder(QMainWindow):
     The algorithms for this should potentially be within the MeshObj class.
     """
     def __init__(self, mesh:TriMesh, parent = None):
-        super(LandmarkFinder, self).__init__(parent)
+        super().__init__(parent)
         self.setWindowTitle("Landmark Finder")
         self.main_widget = QWidget()
         self.setCentralWidget(self.main_widget)
@@ -902,7 +902,7 @@ class LandmarkFinder(QMainWindow):
 
 class progressBar(QMainWindow):
     def __init__(self, parent = None) -> None:
-        super(progressBar).__init__(parent)
+        super().__init__(parent)
         # TODO: Set this up to be a pop up window that comes up when the
         # amberg or RBF morphers are running the program to prevent the user
         # from doing anything else with the application.
@@ -915,7 +915,7 @@ class fileManager(QWidget):
     Controls to manage the displayed files.
     """
     def __init__(self, parent = None):
-        super(fileManager, self).__init__(parent)
+        super().__init__(parent)
         self.table = QTableWidget()
         self.layout = QGridLayout()
         self.layout.addWidget(self.table, 0, 0)

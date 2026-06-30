@@ -37,7 +37,9 @@ def test_generate_interpolation_matrix():
     displaced_mesh = MockMesh(displaced_vertices)
 
     # Instantiate RBFMorpher with the custom RBF function
-    morpher = RBFMorpher(original_mesh, displaced_mesh, custom_RBF)
+    morpher = RBFMorpher(original_mesh=original_mesh,
+                         displaced_mesh=displaced_mesh,
+                         RBF=custom_RBF)
 
     # Expected interpolation matrix
     expected_matrix = np.zeros((3, 3))
@@ -59,7 +61,9 @@ def test_generate_coefficient_matrix():
     displaced_mesh = MockMesh(displaced_vertices)
 
     # Instantiate RBFMorpher with the custom RBF function
-    morpher = RBFMorpher(original_mesh, displaced_mesh, custom_RBF)
+    morpher = RBFMorpher(original_mesh=original_mesh,
+                         displaced_mesh=displaced_mesh,
+                         RBF=custom_RBF)
 
     # Manually compute the expected coefficient matrix
     interp_matrix = np.zeros((3, 3))
