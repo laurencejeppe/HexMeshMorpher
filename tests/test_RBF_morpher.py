@@ -8,8 +8,25 @@ from unittest.mock import MagicMock
 class MockMesh:
     """Mock class for MeshObj.STLMesh."""
     def __init__(self, vertices):
-        self.trimesh = MagicMock()
-        self.trimesh.vertices = vertices
+        self.trimesh = self
+        self.vertices = vertices
+
+    @property
+    def trimesh(self):
+        return self
+
+    @trimesh.setter
+    def trimesh(self, value):
+        # Keep compatibility with code that expects a trimesh attribute.
+        self._trimesh = value
+
+    @property
+    def vertices(self):
+        return self._vertices
+
+    @vertices.setter
+    def vertices(self, value):
+        self._vertices = value
 
 def test_generate_interpolation_matrix():
     # Mock data for original and displaced meshes
