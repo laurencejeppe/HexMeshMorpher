@@ -739,6 +739,10 @@ class INPMesh(Mesh):
         centroid = [(maximums[i] + minimums[i])/2 for i in range(3)]
         difference = [maximums[i] - minimums[i] for i in range(3)]
         return centroid, difference, maximums, minimums
+    
+
+def something():
+    pass
 
 class ParsingError(Exception):
     """Errer message for reading data from inp or stl files."""
