@@ -1,5 +1,5 @@
 from .MeshObj import (
-    STLMesh,
+    TriMesh,
     Mesh,
     INPMesh,
 )
