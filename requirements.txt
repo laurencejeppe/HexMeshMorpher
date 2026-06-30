@@ -5,4 +5,4 @@ PyQt6_sip==13.10.0
 rtree==1.4.0
 scipy==1.15.2
 trimesh==4.6.8
-vtk=9.6.2
+vtk==9.6.2
