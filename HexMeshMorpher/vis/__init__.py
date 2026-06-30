@@ -1,1 +1,1 @@
-from .vis import vtkRenWin, qtVtkWindow, MeshActor, PointArrayActor
+#from .vis import vtkRenWin, qtVtkWindow, MeshActor, PointArrayActor
