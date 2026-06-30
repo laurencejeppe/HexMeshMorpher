@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from HexMeshMorpher.MeshObj import STLMesh
+from HexMeshMorpher.MeshObj import TriMesh
 import time
 from multiprocessing import Process, Queue, Lock, Array
 import queue
@@ -13,8 +13,8 @@ class RBFMorpher:
     changed later."""
     def __init__(self,
                  RBF,
-                 original_mesh: STLMesh=None,
-                 displaced_mesh: STLMesh=None,
+                 original_mesh: TriMesh=None,
+                 displaced_mesh: TriMesh=None,
                  use_multithread: bool=False,
                  use_vectorised: bool=True,
                  processors: int=6):
@@ -40,13 +40,13 @@ class RBFMorpher:
     def __magnitude(self, vector):
         return np.sqrt(vector.dot(vector))
     
-    def set_original_mesh(self, original_mesh: STLMesh):
+    def set_original_mesh(self, original_mesh: TriMesh):
         """Sets the original mesh and its vertices."""
         self.original_source_vertices = np.array(original_mesh.trimesh.vertices)
         self.n = len(self.original_source_vertices)
         self.interp_matrix = np.zeros((self.n,self.n))
 
-    def set_displaced_mesh(self, displaced_mesh: STLMesh):
+    def set_displaced_mesh(self, displaced_mesh: TriMesh):
         """Sets the displaced mesh and its vertices."""
         self.source_v_disp = np.array(displaced_mesh.trimesh.vertices) - self.original_source_vertices
 

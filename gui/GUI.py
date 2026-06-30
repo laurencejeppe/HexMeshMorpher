@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
 
 import numpy as np
 from HexMeshMorpher.MeshObj import (
-    STLMesh, INPMesh, Mesh
+    TriMesh, INPMesh, Mesh
 )
 from HexMeshMorpher.amberg_mapping import AmbergMapping
 from HexMeshMorpher.RBF_morpher import (
@@ -83,7 +83,7 @@ class MeshMorpherGUI(QMainWindow):
         self.openFile = QAction(QIcon('open.png'), 'Open', self,
                                 shortcut='Ctrl+O',
                                 triggered=self.chooseOpenFile)
-        self.openSTLmesh = QAction(QIcon('open.png'), 'Open TRI', self,
+        self.openTriMesh = QAction(QIcon('open.png'), 'Open TRI', self,
                                     triggered=self.load_stl_mesh)
         self.openINPmesh = QAction(QIcon("open.png"), 'Open INP', self,
                                    triggered=self.load_inp_mesh)
@@ -107,7 +107,7 @@ class MeshMorpherGUI(QMainWindow):
         """
         self.fileMenu = self.menuBar().addMenu("&File")
         self.fileMenu.addAction(self.openFile)
-        self.fileMenu.addAction(self.openSTLmesh)
+        self.fileMenu.addAction(self.openTriMesh)
         self.fileMenu.addAction(self.openINPmesh)
         self.fileMenu.addAction(self.choose_wdir)
         self.fileMenu.addAction(self.saveFile)
@@ -193,7 +193,7 @@ class MeshMorpherGUI(QMainWindow):
         if file_path[-4:] == '.inp':
             mesh = INPMesh(file_name, file_name, file_folder)
         elif file_path[-4:] == '.stl':
-            mesh = STLMesh(file_name, file_name, file_folder)
+            mesh = TriMesh(file_name, file_name, file_folder)
         else:
             show_message("Mesh selection has failed")
             return
@@ -280,7 +280,7 @@ class MeshMorpherGUI(QMainWindow):
         for row in rows:
             mesh_name = self.file_manager.table.item(row, 0).text()
         mesh = self.files[mesh_name]
-        if not isinstance(mesh, STLMesh):
+        if not isinstance(mesh, TriMesh):
             show_message(message="Landmark finder is currently only supported for STL meshes!",
                          title="Item Selection Error")
             return
@@ -351,7 +351,7 @@ class Mesh_Options_Dialog(QDialog):
 
         if self.convert_to_stl.isChecked():
             self.mesh.write_stl()
-            self.mesh = STLMesh(self.mesh.f_name, self.mesh.f_name, self.mesh.f_folder)
+            self.mesh = TriMesh(self.mesh.f_name, self.mesh.f_name, self.mesh.f_folder)
 
         description = self.description_edit.toPlainText()
         self.mesh.description = description
@@ -506,8 +506,8 @@ class Amberg_Mapping(QMainWindow):
             show_message(message="You need at least two meshes to perform an Amberg Mapping!",
                          title="Mesh Error")
             return
-        source: STLMesh = self.files[self.source.currentText()]
-        target: STLMesh = self.files[self.target.currentText()]
+        source: TriMesh = self.files[self.source.currentText()]
+        target: TriMesh = self.files[self.target.currentText()]
         assert source.units == target.units, "The source and target must have the same units!"
         description = f"Mapping from {self.source.currentText()} to {self.target.currentText()}"
 
@@ -518,7 +518,7 @@ class Amberg_Mapping(QMainWindow):
             number += 1
             output_name = base_name + f'-{number}'
 
-        output = STLMesh(output_name,
+        output = TriMesh(output_name,
                                  output_name,
                                  f_folder=self.WDIR,
                                  description=description,
@@ -710,8 +710,8 @@ class RBF_Morpher(QMainWindow):
                          title="Mesh Error")
             return
         
-        unmapped: STLMesh = self.files[self.unmapped.currentText()]
-        mapped: STLMesh = self.files[self.mapped.currentText()]
+        unmapped: TriMesh = self.files[self.unmapped.currentText()]
+        mapped: TriMesh = self.files[self.mapped.currentText()]
         self.morpher.set_original_mesh(unmapped)
         self.morpher.set_displaced_mesh(mapped)
         self.morpher.generate_interpolation_matrix()
@@ -814,7 +814,7 @@ class LandmarkFinder(QMainWindow):
     
     The algorithms for this should potentially be within the MeshObj class.
     """
-    def __init__(self, mesh:STLMesh, parent = None):
+    def __init__(self, mesh:TriMesh, parent = None):
         super(LandmarkFinder, self).__init__(parent)
         self.setWindowTitle("Landmark Finder")
         self.main_widget = QWidget()
@@ -872,7 +872,8 @@ class LandmarkFinder(QMainWindow):
         self.update_info_box(f"\tDetected {len(self.mesh.boundary.corner_nodes)}" \
                              + " corners with a threshold of" \
                              + f" {self.mesh.boundary.corner_node_angle_threshold} degrees!")
-        self.update_info_box(f"Corner nodes: {self.mesh.boundary.corner_nodes}")
+        if self.mesh.boundary.corner_nodes:
+            self.update_info_box(f"Corner nodes: {self.mesh.boundary.corner_nodes}")
 
     def resample_boundary_nodes(self):
         """ Resamples the boundary nodes to a given node count. """
