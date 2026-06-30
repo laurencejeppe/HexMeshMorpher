@@ -80,7 +80,7 @@ class Mesh():
 # trimesh.transformations.scale_and_translate(scale=None, translate=None)
 
 
-class STLMesh(Mesh):
+class TriMesh(Mesh):
     """Class for defining file names and locations where they are saved"""
 
     def __init__(self, name: str, f_name: str, f_folder: str,
@@ -155,7 +155,7 @@ class STLMesh(Mesh):
     def copy_mesh(self, new_name: str, new_f_name: str,
                   new_description: str = None):
         """Returns a new STMesh object with the same trimesh"""
-        mesh = STLMesh(new_name, new_f_name, self.f_folder, new_description,
+        mesh = TriMesh(new_name, new_f_name, self.f_folder, new_description,
                        load=False)
         mesh.trimesh = self.trimesh.copy()
         return mesh
@@ -690,9 +690,9 @@ class INPMesh(Mesh):
         return centroid, difference, maximums, minimums
 
 
-def cut_meshes(meshes: list[STLMesh],
+def cut_meshes(meshes: list[TriMesh],
                offset: float = 0.210,
-               norm_vect: tuple = (-0.3545, 0.9166, 0.0)) -> list[STLMesh]:
+               norm_vect: tuple = (-0.3545, 0.9166, 0.0)) -> list[TriMesh]:
     """
     Cuts all the meshes within the list meshes, of MeshObj objects (meshes)
     and cuts them off acocrding to the offset and norm_vect parameters where

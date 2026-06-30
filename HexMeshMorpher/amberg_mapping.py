@@ -6,7 +6,7 @@ objects are returns to the mapping in the mapped object which is returned.
 
 import time
 import trimesh as tr
-from HexMeshMorpher.MeshObj import STLMesh
+from HexMeshMorpher.MeshObj import TriMesh
 
 class AmbergMapping:
     """
@@ -14,8 +14,8 @@ class AmbergMapping:
     objects and returns to the mapping in the mapped object which is
     returned.
     """
-    def __init__(self, sourcey: STLMesh, targety: STLMesh,
-                 mappedy: STLMesh, lpairs: list=None,
+    def __init__(self, sourcey: TriMesh, targety: TriMesh,
+                 mappedy: TriMesh, lpairs: list=None,
                  steps: list=None, options=None) -> None:
         self.source = sourcey
         self.target = targety
@@ -89,7 +89,7 @@ class AmbergMapping:
             print("Amberg Mapping Completed in "+str(time.time()-start_time)+"s")
 
 
-    def find_vertex_index(self, mesh: STLMesh, vertex):
+    def find_vertex_index(self, mesh: TriMesh, vertex):
         """Finds the index of a vertex in the mesh [mesh_name] given its position."""
         for i, mesh_vertex in enumerate(mesh.trimesh.vertices):
             if (mesh_vertex == vertex).all():
