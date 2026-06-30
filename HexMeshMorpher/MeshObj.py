@@ -91,6 +91,24 @@ class Mesh(ABC):
     @abstractmethod
     def _do_change_units(self, factor) -> None:
         raise NotImplementedError
+    
+    @staticmethod
+    def calculate_angle(nodes):
+        """
+        Calculates the angle between three nodes.
+        nodes:
+            iterable of nodes with coordinates [[x1, y1, z1],
+                                                [x2, y2, z2],
+                                                [x3, y3, z3]]
+            where the angle 1-2-3 is then found.
+        """
+        v1 = [a_i - b_i for a_i, b_i in zip(nodes[0], nodes[1])]
+        v2 = [a_i - b_i for a_i, b_i in zip(nodes[2], nodes[1])]
+        dot = np.dot(v1, v2)
+        v1_mag = np.linalg.norm(v1)
+        v2_mag = np.linalg.norm(v2)
+        angle = np.arccos(dot/(v1_mag*v2_mag))
+        return angle
 
 
 # If you want rotation matrices use
@@ -303,23 +321,6 @@ class TriMesh(Mesh):
         self.boundary.corner_nodes = corners
         self.boundary.corner_node_angle_threshold = angle_threshold
         return corners
-
-    def calculate_angle(self, nodes):
-        """
-        Calculates the angle between three nodes.
-        nodes:
-            iterable of nodes with coordinates [[x1, y1, z1],
-                                                [x2, y2, z2],
-                                                [x3, y3, z3]]
-            where the angle 1-2-3 is then found.
-        """
-        v1 = [a_i - b_i for a_i, b_i in zip(nodes[0], nodes[1])]
-        v2 = [a_i - b_i for a_i, b_i in zip(nodes[2], nodes[1])]
-        dot = np.dot(v1, v2)
-        v1_mag = np.linalg.norm(v1)
-        v2_mag = np.linalg.norm(v2)
-        angle = np.arccos(dot/(v1_mag*v2_mag))
-        return angle
 
     def restarted_arranged_nodes(self, starting_point: np.ndarray = None,
                                  rotational_axis: np.ndarray = None,
