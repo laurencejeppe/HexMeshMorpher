@@ -5,3 +5,4 @@ from .MeshObj import (
 )
 from .amberg_mapping import AmbergMapping
 from .RBF_morpher import RBFMorpher
+from . import vis

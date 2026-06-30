@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QTextEdit, QDialogButtonBox)
 
 import numpy as np
+import vtk
 from HexMeshMorpher.MeshObj import (
     TriMesh, INPMesh, Mesh
 )
@@ -25,6 +26,7 @@ from HexMeshMorpher.amberg_mapping import AmbergMapping
 from HexMeshMorpher.RBF_morpher import (
     RBFMorpher, custom_RBF
 )
+from HexMeshMorpher.vis.vis import qtVtkWindow, vtkRenWin, MeshActor, PointArrayActor
 
 
 
@@ -829,13 +831,16 @@ class LandmarkFinder(QMainWindow):
         self.mesh = mesh
         self.boundary_nodes = None
 
+        # Visualisation of the mesh
+        self.vtkWidget = qtVtkWindow()
+        self.renWin = self.vtkWidget._RenderWindow
+        self.renWin.setBackground([0.6,0.6,0.6])
+
         self.main_layout = QGridLayout()
         self.mesh_name_label = QLabel(self.mesh.f_name)
         self.main_layout.addWidget(self.mesh_name_label, 0, 0)
 
-        self.info_box = QLabel("")
-        self.info_box.setWordWrap(True)
-        self.main_layout.addWidget(self.info_box, 1, 0)
+        self.main_layout.addWidget(self.vtkWidget, 1, 0)
 
         self.button_layout = QVBoxLayout()
         self.evaluate_boundary_btn = QPushButton("Evaluate Mesh Boundary")
@@ -854,6 +859,9 @@ class LandmarkFinder(QMainWindow):
         self.resample_boundary_btn = QPushButton("Resmple Mesh Boundary")
         self.resample_boundary_btn.clicked.connect(self.resample_boundary_nodes)
         self.button_layout.addWidget(self.resample_boundary_btn)
+        self.info_box = QLabel("")
+        self.info_box.setWordWrap(True)
+        self.button_layout.addWidget(self.info_box)
         self.button_layout.addStretch()
 
         self.main_layout.addLayout(self.button_layout, 1, 1)
@@ -861,10 +869,14 @@ class LandmarkFinder(QMainWindow):
 
         self.main_widget.setLayout(self.main_layout)
 
-        self.resize(520,400)
+        self.resize(750,600)
+
+        self.display_mesh()
 
         # TODO: Change layout parameters to allow for the window to be bigger
         # without messing up the look
+
+        # TODO: Add visualisation of the boundary resampling or boundary evaluation
 
     def evaluate_boundary(self):
         """ Evaluates the boundary of the mesh and stores these parameters
@@ -880,6 +892,15 @@ class LandmarkFinder(QMainWindow):
         if self.mesh.boundary.corner_nodes:
             self.update_info_box(f"Corner nodes: {self.mesh.boundary.corner_nodes}")
 
+        boundary_vertices = self.mesh.trimesh.vertices[self.mesh.boundary.nodes]
+        point_actor = PointArrayActor(boundary_vertices[1:])
+        point_actor.setColour()
+        self.renWin.renderActor(point_actor)
+        first_node = [boundary_vertices[0]]
+        first_node_actor = PointArrayActor(first_node)
+        first_node_actor.setColour([0.0, 0.0, 1.0])
+        self.renWin.renderActor(first_node_actor)
+
     def resample_boundary_nodes(self):
         """ Resamples the boundary nodes to a given node count. """
         num_nodes = self.num_nodes_selector.value()
@@ -888,6 +909,15 @@ class LandmarkFinder(QMainWindow):
                                           ignore_corners=self.ignore_corners_flag.isChecked())
         self.update_info_box(f"Mesh boundary has been resampled to give \
                              coordinates of {num_nodes}.")
+        
+        boundary_vertices = self.mesh.boundary.interpollation_coords
+        point_actor = PointArrayActor(boundary_vertices[1:])
+        point_actor.setColour([1.0, 1.0, 0.0])
+        self.renWin.renderActor(point_actor)
+        first_node = [boundary_vertices[0]]
+        first_node_actor = PointArrayActor(first_node)
+        first_node_actor.setColour([0.0, 1.0, 0.0])
+        self.renWin.renderActor(first_node_actor)
 
     def update_info_box(self, new_text):
         """ Adds a String to the info box to give a message about function completion to the user.
@@ -898,6 +928,19 @@ class LandmarkFinder(QMainWindow):
         info_box_text = self.info_box.text()
         info_box_text += (new_text + '\n')
         self.info_box.setText(info_box_text)
+
+    def display_mesh(self):
+        """
+        Displays a mesh in a QtWindow in the LandmarkFinder Window.
+        """
+        mesh_actor = MeshActor(input_mesh=self.mesh)
+        mesh_actor.setColour([1.0, 1.0, 1.0])
+        tform = vtk.vtkTransform()
+        tform.PostMultiply()
+        mesh_actor.SetUserTransform(tform)
+        
+        self.renWin.renderActor(mesh_actor)
+        self.renWin.addTriad(mesh_actor)
 
 
 class progressBar(QMainWindow):
