@@ -207,7 +207,7 @@ class TriMesh(Mesh):
         self.trimesh.apply_transform(t_matrix)
 
     def copy_mesh(self, new_name: str, new_f_name: str,
-                  new_description: str = None) -> TriMesh:
+                  new_description: str = None):
         """Returns a new STMesh object with the same trimesh"""
         mesh = TriMesh(new_name, new_f_name, self.f_folder, new_description,
                        load=False)
