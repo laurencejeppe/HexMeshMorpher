@@ -325,30 +325,9 @@ class TriMesh(Mesh):
 
         #self.boundary.edges = unique_edges
         #self.boundary.nodes = np.unique(unique_edges.flatten())
-        #self.arrange_boundary()
         #self.boundary.num_nodes = len(self.boundary.nodes)
         #self.get_boundary_faces()
-        #self.get_corners(angle_threshold=corner_threshold)
         return self.trimesh.vertices[ordered_nodes], corner_node_coords if evaluate_corners else None
-
-    def arrange_boundary(self) -> None:
-        """ Arranges the boundary edges and nodes. """
-        self.arrange_boundary_nodes()
-
-    def arrange_boundary_nodes(self) -> np.ndarray:
-        """ Arranges the nodes array to match the ordered list of edges. """
-        if not self.boundary.edges_sorted:
-            self.arrange_boundary_edges()
-        sorted_nodes = np.zeros(np.shape(self.boundary.nodes), dtype=np.uint32)
-        for i, edge in enumerate(self.boundary.edges):
-            sorted_nodes[i] = int(edge[0])
-        assert set(sorted_nodes) == set(self.boundary.nodes), (
-            "Error in sorting nodes."
-            )
-        self.boundary.nodes = sorted_nodes
-        self.boundary.nodes_sorted = True
-        self.boundary.nodes = self.restarted_arranged_nodes()
-        return sorted_nodes
 
     def get_boundary_faces(self) -> list:
         """ Finds all the faces that have edges along the boundary. """
@@ -362,27 +341,6 @@ class TriMesh(Mesh):
         self.boundary.faces = boundary_faces
         return boundary_faces
 
-    def get_corners(self, angle_threshold: float = 130.0) -> list:
-        """
-        Finds all the corners of a mesh defined by a certain angle threshold.
-        DEPRICATED: Use the static method Mesh.evaluate_corners instead.
-        """
-        if not self.boundary.edges_sorted:
-            self.get_boundary()
-
-        corners = []
-        previous_edge = self.boundary.edges[-1]
-        for edge in self.boundary.edges:
-            nodes = [previous_edge[0], edge[0], edge[1]]
-            nodes_coords = [self.trimesh.vertices[i] for i in nodes]
-            angle_rad = self.calculate_angle(nodes_coords)
-            if angle_rad <= angle_threshold*np.pi/180.0:
-                corners.append(edge[0])
-            previous_edge = edge
-        self.boundary.corner_nodes = corners
-        self.boundary.corner_node_angle_threshold = angle_threshold
-        return corners
-
     def restarted_arranged_nodes(self, starting_point: np.ndarray = None,
                                  rotational_axis: np.ndarray = None,
                                  ccw_flag: bool = False) -> np.ndarray:
@@ -391,8 +349,6 @@ class TriMesh(Mesh):
         starting_point is the first element and the subsequent nodes go around
         in a clockwise direction about the axis (rotation_axis).
         """
-        if not self.boundary.nodes_sorted:
-            self.arrange_boundary()
         if not starting_point:
             starting_point = np.array([1.0*self.unit_factor, 0.0, 0.0])
         if not rotational_axis:
@@ -401,39 +357,55 @@ class TriMesh(Mesh):
             rotational_axis = np.copysign(rotational_axis, -1)
 
         coords = self.trimesh.vertices[self.boundary.nodes]
-        indices = self.boundary.nodes
+        nodes = self.boundary.nodes
 
         # Get the starting point
         if self.boundary.corner_nodes:
             corner_coords = self.trimesh.vertices[self.boundary.corner_nodes]
-            distances = np.linalg.norm(corner_coords - starting_point, axis=1)
-            node_num = self.boundary.corner_nodes[np.argmin(distances)]
+            corner_nodes = self.boundary.corner_nodes
+            node_num = self.get_closest_node(corner_coords, corner_nodes, starting_point)
         else:
             # TODO: If you want to make this a point on the yz-plane you should
             #  - find the nodes with the smallest magnitude negative and positive z values that also have positive x value
 
-            # Calculate the distances from the start point to each of the
-            # boundary nodes
-            distances = np.linalg.norm(coords - starting_point, axis=1)
-            # Index of the closest value
-            node_num = self.boundary.nodes[np.argmin(distances)]
-        # Checks to see if the order of the nodes is going round the z axis in
+            node_num = self.get_closest_node(coords, nodes, starting_point)
+
+
+        # Split and rejoin the array
+        new_node_list = self.change_node_list_start(nodes, node_num)
+
+        # Checks to see if the order of the nodes is going round the y axis in
         # a clockwise rotation < 0 or a counter-clockwise rotation > 0
         # direction.
-        index = np.where(indices == node_num)[0][0]
-        rotation = np.dot(rotational_axis,
-                          np.cross(coords[index], coords[index+1]))
+        coords = self.trimesh.vertices[new_node_list]
+        rotation = self.check_path_rotation(coords, axis=[0.0, 1.0, 0.0])
         if rotation > 0:
-            indices = np.flip(indices)
+            new_node_list = np.flip(new_node_list)
             print("Index array has been flipped.")
-        # Split and rejoin the array
-        index = np.where(indices == node_num)[0][0]
-        [a1, a2] = np.split(indices, np.array([index]))
-        new_indices = np.concatenate((a2, a1, ), dtype=np.uint32)
-        assert set(new_indices) == set(indices), (
+
+        return new_node_list
+    
+    def get_closest_node(self, coords: np.ndarray, nodes:np.ndarray, starting_point):
+        """
+        Calculate the distance from the coords to the starting point and return the corresponding node."""
+        distances = np.linalg.norm(coords - starting_point, axis=1)
+        closest_node = nodes[np.argmin(distances)]
+        return closest_node
+        
+    
+    def change_node_list_start(self, node_list: np.ndarray, start_node: int):
+        index = np.where(node_list == start_node)[0][0]
+        [a1, a2] = np.split(node_list, np.array([index]))
+        new_node_list = np.concatenate((a1, a2, ), dtype=np.uint32)
+        assert set(new_node_list) == set(node_list), (
             "Rearranging indices has failed"
-            )
-        return new_indices
+        )
+        return new_node_list
+
+    def check_path_rotation(self, coords, axis=[0.0, 1.0, 0.0]):
+        rotation = np.dot(axis,
+                          np.cross(coords[0], coords[1]))
+        return rotation
 
     def resample_boundary_nodes(self, num_nodes, ccw_flag: bool = False,
                                 ignore_corners: bool = False):
