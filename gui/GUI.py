@@ -882,10 +882,12 @@ class LandmarkFinder(QMainWindow):
         """ Evaluates the boundary of the mesh and stores these parameters
         in the .boundary."""
         # Evaluates the boundary of the mesh
-        corner_threshold = 130
-        boundary_vertices = self.mesh.evaluate_boundary(evaluate_corners=True, corner_threshold=corner_threshold)
-        num_boundary_nodes = self.mesh.boundary.num_nodes
-        num_boundary_corners = self.mesh.boundary.num_corners
+        corners_flag: bool = True
+        corner_threshold: float = 130.0
+        [boundary_vertices, corner_vertices] = self.mesh.evaluate_boundary(evaluate_corners=corners_flag,
+                                                        corner_threshold=corner_threshold)
+        num_boundary_nodes = len(boundary_vertices)
+        num_boundary_corners = len(corner_vertices) if corner_vertices is not None else 0
 
         self.update_info_box("The mesh boundary has been evaluated:")
         self.update_info_box(f"\tDetected {num_boundary_nodes} boundary nodes!")
@@ -900,6 +902,10 @@ class LandmarkFinder(QMainWindow):
         first_node_actor = PointArrayActor(first_node)
         first_node_actor.setColour([0.0, 0.0, 1.0])
         self.renWin.renderActor(first_node_actor)
+        if corner_vertices is not None:
+            corner_actor = PointArrayActor(corner_vertices)
+            corner_actor.setColour([0.0, 1.0, 0.0])
+            self.renWin.renderActor(corner_actor)
 
     def resample_boundary_nodes(self):
         """ Resamples the boundary nodes to a given node count. """

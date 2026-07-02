@@ -93,6 +93,25 @@ class Mesh(ABC):
         raise NotImplementedError
     
     @staticmethod
+    def evaluate_corners(coords, angle_threshold: float = 130.0) -> np.ndarray:
+        """
+        Finds all the corners of a mesh defined by a certain angle threshold.
+        Returns a numpy array of the coordinates of the corner nodes.
+        """
+        corners = []
+        previous_node = coords[-1]
+        current_node = coords[0]
+        next_node = coords[1]
+        for i, current_node in enumerate(coords):
+            next_node = coords[(i + 1) % len(coords)]
+            nodes_coords = [previous_node, current_node, next_node]
+            angle_rad = Mesh.calculate_angle(nodes_coords)
+            if angle_rad <= angle_threshold*np.pi/180.0:
+                corners.append(current_node)
+            previous_node = current_node
+        return np.array(corners)
+    
+    @staticmethod
     def calculate_angle(nodes):
         """
         Calculates the angle between three nodes.
@@ -265,7 +284,8 @@ class TriMesh(Mesh):
         self.boundary.nodes = ordered_nodes
 
         if evaluate_corners:
-            self.evaluate_corners(angle_threshold=corner_threshold)
+            corner_node_coords = self.evaluate_corners(coords=self.trimesh.vertices[ordered_nodes],
+                                                       angle_threshold=corner_threshold)
 
         #self.boundary.edges = unique_edges
         #self.boundary.nodes = np.unique(unique_edges.flatten())
@@ -273,26 +293,7 @@ class TriMesh(Mesh):
         #self.boundary.num_nodes = len(self.boundary.nodes)
         #self.get_boundary_faces()
         #self.get_corners(angle_threshold=corner_threshold)
-        return self.trimesh.vertices[self.boundary.nodes]
-    
-    @staticmethod
-    def evaluate_corners(mesh, angle_threshold: float = 130.0) -> np.ndarray:
-        """
-        Finds all the corners of a mesh defined by a certain angle threshold.
-        """
-
-        corners = []
-        previous_edge = self.boundary.edges[-1]
-        for edge in self.boundary.edges:
-            nodes = [previous_edge[0], edge[0], edge[1]]
-            nodes_coords = [self.trimesh.vertices[i] for i in nodes]
-            angle_rad = self.calculate_angle(nodes_coords)
-            if angle_rad <= angle_threshold*np.pi/180.0:
-                corners.append(edge[0])
-            previous_edge = edge
-        self.boundary.corner_nodes = corners
-        self.boundary.corner_node_angle_threshold = angle_threshold
-        return corners
+        return self.trimesh.vertices[self.boundary.nodes], corner_node_coords if evaluate_corners else None
 
     def arrange_boundary(self) -> None:
         """ Arranges the boundary edges and nodes. """
@@ -357,6 +358,7 @@ class TriMesh(Mesh):
     def get_corners(self, angle_threshold: float = 130.0) -> list:
         """
         Finds all the corners of a mesh defined by a certain angle threshold.
+        DEPRICATED: Use the static method Mesh.evaluate_corners instead.
         """
         if not self.boundary.edges_sorted:
             self.get_boundary()

@@ -151,6 +151,7 @@ class PointArrayActor(vtk.vtkActor):
 
         self.SetMapper(self.mapper)
 
+        self.GetProperty().SetRenderPointsAsSpheres(True)
         self.GetProperty().SetPointSize(8)
 
     def setColour(self, colour=[1.0, 0.0, 0.0]):
