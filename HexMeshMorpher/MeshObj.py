@@ -126,13 +126,20 @@ class Mesh(ABC):
         """
         Finds all the corners of a mesh defined by a certain angle threshold.
         Returns a numpy array of the coordinates of the corner nodes.
+        Inputs:
+            coords: np.ndarray
+                An array of coordinates representing a boundary of nodes.
+                This should have the same node as the first and last item to represent a closed loop
+        Returns:
+            corners: np.ndarray
+                An array of coordinates thar represent the corners of the mesh.
         """
+        assert coords[0].all() == coords[-1].all(), ("The first and last elements of coords are not the same, \
+                                         this is not a closed boundary!")
         corners = []
-        previous_node = coords[-1]
-        current_node = coords[0]
-        next_node = coords[1]
-        for i, current_node in enumerate(coords):
-            next_node = coords[(i + 1) % len(coords)]
+        previous_node = coords[-2]
+        for i, current_node in enumerate(coords[:-1]):
+            next_node = coords[i + 1]
             nodes_coords = [previous_node, current_node, next_node]
             angle_rad = Mesh.calculate_angle(nodes_coords)
             if angle_rad <= angle_threshold*np.pi/180.0:
@@ -307,7 +314,7 @@ class TriMesh(Mesh):
         # The first and last nodes in the ordered_nodes array are the same node, so the array is closed.
         ordered_nodes = np.array(boundary_line_entity.to_dict()['points'])
 
-        print(boundary_path.discrete)
+        boundary_path.discrete # These are the coords of the nodes around the path
 
         if boundary_line_entity.closed:
             print("Boundary is closed, making a complete circle")
@@ -341,21 +348,13 @@ class TriMesh(Mesh):
         self.boundary.faces = boundary_faces
         return boundary_faces
 
-    def restarted_arranged_nodes(self, starting_point: np.ndarray = None,
-                                 rotational_axis: np.ndarray = None,
-                                 ccw_flag: bool = False) -> np.ndarray:
+    def restarted_arranged_nodes(self, starting_point: np.ndarray,
+                                 rotational_axis: np.ndarray = np.array([0.0, 1.0, 0.0])) -> np.ndarray:
         """
         Arranges the nodes array such that the point closest to
         starting_point is the first element and the subsequent nodes go around
         in a clockwise direction about the axis (rotation_axis).
         """
-        if not starting_point:
-            starting_point = np.array([1.0*self.unit_factor, 0.0, 0.0])
-        if not rotational_axis:
-            rotational_axis = np.array([0.0, 1.0, 0.0])
-        if ccw_flag:
-            rotational_axis = np.copysign(rotational_axis, -1)
-
         coords = self.trimesh.vertices[self.boundary.nodes]
         nodes = self.boundary.nodes
 
@@ -378,10 +377,11 @@ class TriMesh(Mesh):
         # a clockwise rotation < 0 or a counter-clockwise rotation > 0
         # direction.
         coords = self.trimesh.vertices[new_node_list]
-        rotation = self.check_path_rotation(coords, axis=[0.0, 1.0, 0.0])
-        if rotation > 0:
+        rotation = self.check_path_rotation_axis(coords)
+        if np.dot(rotation, rotational_axis) < 0:
+            # Rotation is left-handed about rotational_axis
             new_node_list = np.flip(new_node_list)
-            print("Index array has been flipped.")
+            print("Index array has been flipped to ensure right-handed rotation.")
 
         return new_node_list
     
@@ -391,7 +391,6 @@ class TriMesh(Mesh):
         distances = np.linalg.norm(coords - starting_point, axis=1)
         closest_node = nodes[np.argmin(distances)]
         return closest_node
-        
     
     def change_node_list_start(self, node_list: np.ndarray, start_node: int):
         index = np.where(node_list == start_node)[0][0]
@@ -402,24 +401,43 @@ class TriMesh(Mesh):
         )
         return new_node_list
 
-    def check_path_rotation(self, coords, axis=[0.0, 1.0, 0.0]):
-        rotation = np.dot(axis,
-                          np.cross(coords[0], coords[1]))
-        return rotation
+    def find_the_point_of_intersection_with_xy_plane(self, coords: np.ndarray):
+        """
+        This will be a temporary hard coded option for defining where you want the start of the node array to be.
+        Will find the point at which the array of coords crosses the xy-plane. (i.e. when z is zero)
+        """
+        # TODO: Impliment this function
+        # Ignore values where x is negative
+
+        # Find the consecutive node coords where the sign of z changes
+
+        # Find the linear interpolation of these two points that intersects the xy-plane
+
+        coordinate = np.array([1,2,3])
+        # This will need to be coupled with findng the node indices 
+        # as well as defining a new start point for the node array based on this.
+        return coordinate
+
+    def check_path_rotation_axis(self, coords):
+        normalised_coords = coords / np.linalg.norm(coords, axis=1)[:, None]
+        axes = np.cross(normalised_coords[:-1], normalised_coords[1:])
+        axis = axes.mean(axis=0)
+        axis /= np.linalg.norm(axis)
+        return axis
 
     def resample_boundary_nodes(self, num_nodes, ccw_flag: bool = False,
                                 ignore_corners: bool = False):
         """
         Interpolates the points around a polygon.
         """
-        if self.boundary.nodes is None:
-            self.get_boundary()
+        assert self.boundary.nodes is not None, ("No boundary nodes are present")
         if not self.boundary.nodes_sorted:
-            self.arrange_boundary()
+            print("Warning! The boundary_nodes_sorted flag suggests the nodes are not sorted.")
 
-        boundary_nodes = self.restarted_arranged_nodes(ccw_flag=ccw_flag)
+        # boundary_nodes = self.restarted_arranged_nodes(ccw_flag=ccw_flag)
+        boundary_nodes = self.boundary.nodes
         coords = self.trimesh.vertices[boundary_nodes]
-        coords = np.append(coords, [coords[0]], axis=0)
+        # coords = np.append(coords, [coords[0]], axis=0) # Already have the first and last node are the same
 
         if self.boundary.corner_nodes and not ignore_corners:
             # TODO: Adjust the nodes number to be representitive of the total
@@ -455,10 +473,7 @@ class TriMesh(Mesh):
         else:
             # You can do this with a trimesh path object trimesh.path.traversal.resample_path()
             # Might want to keep it as is so that I can use the resampling with a non-trimesh object
-            coords = self.trimesh.vertices[boundary_nodes]
-            coords = np.append(coords, [coords[0]], axis=0)
             interp_array = self.resample_nodes(coords, num_nodes + 1)
-            last_index = len(interp_array) - 1
 
         self.boundary.interpollation_coords = interp_array[:-1]
         # You should only do this if your edge is very close to the value your a fixing it as.
