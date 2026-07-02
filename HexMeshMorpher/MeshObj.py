@@ -20,10 +20,10 @@ class Boundary():
     """ Data class for holding information about the boundary of a mesh. """
     nodes: np.ndarray = None
     nodes_sorted: bool = False
-    is_watertight: bool = None
-    edges: np.ndarray = None
-    edges_sorted: bool = False
-    faces: np.ndarray = None
+    #is_watertight: bool = None
+    #edges: np.ndarray = None
+    #edges_sorted: bool = False
+    #faces: np.ndarray = None
     num_nodes: int = None
     corner_nodes: list = None
     corner_node_angle_threshold: float = None
@@ -214,12 +214,19 @@ class TriMesh(Mesh):
         mesh.trimesh = self.trimesh.copy()
         return mesh
 
-    def get_boundary(self) -> np.ndarray:
+    def evaluate_boundary(self,
+                          evaluate_corners: bool = False,
+                          corner_threshold: float = 130.0) -> np.ndarray:
         """
         Take a trimesh object as input and returns the coordinates of all the
         nodes that are on a boundary of the mesh. It is therefore importent to
         make sure that your mesh does not have any holes that you don't want to
         be included.
+        input: 
+            evaluate_corners: bool = False
+                This flag determines whether or not the corners of the mesh are evaluated.
+            corner_threshold: float = 130.0
+                This is the angle threshold that determines whether or not a node is considered a corner.
         """
         assert not self.trimesh.is_watertight, (
             "This mesh has no holes, so rim cannot be found."
@@ -229,18 +236,44 @@ class TriMesh(Mesh):
             f"found.\n\tEuler number = {self.trimesh.euler_number}"
             f"\n\tMesh contains {1-self.trimesh.euler_number} holes."
             )
+        # Determine the unique edges of the mesh.
+        # These are the edges that are only used by one face of the mesh.
+        # These edges are the boundary edges of the mesh.
         unique_edges = self.trimesh.edges[
             tr.grouping.group_rows(self.trimesh.edges_sorted, require_count=1)
         ]
+        # Determine the unique nodes of the mesh that are on the boundary.
+        unique_nodes = np.unique(unique_edges.flatten())
 
-        self.boundary.edges = unique_edges
-        self.boundary.nodes = np.unique(unique_edges.flatten())
-        self.arrange_boundary()
-        self.boundary.is_watertight = self.trimesh.is_watertight
-        self.boundary.num_nodes = len(self.boundary.nodes)
-        self.get_boundary_faces()
-        self.get_corners(angle_threshold=130.0)
-        return self.boundary.nodes
+        # Arranging the boundary edges and nodes to be in order around the rim of the mesh.
+        boundary_paths = tr.path.exchange.misc.edges_to_path(unique_edges, self.trimesh.vertices)
+        bounary_line_entity = boundary_paths['entities'][0]
+
+        # This ordered_nodes array contains the nodes that are on the boundary of the mesh in order.
+        # This is important for the resampling of the boundary nodes to be done correctly.
+        # The first and last nodes in the ordered_nodes array are the same node, so the array is closed.
+        ordered_nodes = np.array(bounary_line_entity.to_dict()['points'])
+
+        if bounary_line_entity.closed:
+            print("Boundary is closed, making a complete circle")
+
+        if set(ordered_nodes) == set(unique_nodes):
+            print("Boundary nodes are the same as the boundary path points")
+        else:
+            print("Boundary nodes are NOT the same as the boundary path points")
+
+        self.boundary.nodes = ordered_nodes
+
+        if evaluate_corners:
+            self.evaluate_corners(angle_threshold=corner_threshold)
+
+        #self.boundary.edges = unique_edges
+        #self.boundary.nodes = np.unique(unique_edges.flatten())
+        #self.arrange_boundary()
+        #self.boundary.num_nodes = len(self.boundary.nodes)
+        #self.get_boundary_faces()
+        #self.get_corners(angle_threshold=corner_threshold)
+        return self.trimesh.vertices[self.boundary.nodes]
 
     def arrange_boundary(self) -> None:
         """ Arranges the boundary edges and nodes. """

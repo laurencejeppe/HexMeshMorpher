@@ -72,6 +72,9 @@ class qtVtkWindow(QVTKRenderWindowInteractor):
         self.iren = self._RenderWindow.GetInteractor()
         self.iren.Initialize()
 
+# Adapt the MeshActor class to work with all mesh objects, not just trimesh
+# Or create a new mesh actor class that can handle inp meshes
+
 class MeshActor(vtk.vtkActor):
     """
     This is an interface between the vtk window and the mesh objects.

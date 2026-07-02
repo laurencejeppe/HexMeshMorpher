@@ -856,7 +856,7 @@ class LandmarkFinder(QMainWindow):
         self.button_layout.addWidget(self.ccw_flag)
         self.ignore_corners_flag = QCheckBox("Ignore Corners")
         self.button_layout.addWidget(self.ignore_corners_flag)
-        self.resample_boundary_btn = QPushButton("Resmple Mesh Boundary")
+        self.resample_boundary_btn = QPushButton("Resample Mesh Boundary")
         self.resample_boundary_btn.clicked.connect(self.resample_boundary_nodes)
         self.button_layout.addWidget(self.resample_boundary_btn)
         self.info_box = QLabel("")
@@ -881,18 +881,18 @@ class LandmarkFinder(QMainWindow):
     def evaluate_boundary(self):
         """ Evaluates the boundary of the mesh and stores these parameters
         in the .boundary."""
-        self.mesh.get_boundary()
-        boundary_nodes = self.mesh.restarted_arranged_nodes()#starting_point=[1.0, 1.0, 1.0])
-        self.update_info_box("The mesh boundary has been evaluated:")
-        self.update_info_box(f"\tDetected {len(self.mesh.boundary.nodes)} boundary nodes!")
-        self.update_info_box(f"\tDetected {len(self.mesh.boundary.edges)} boundary edges!")
-        self.update_info_box(f"\tDetected {len(self.mesh.boundary.corner_nodes)}" \
-                             + " corners with a threshold of" \
-                             + f" {self.mesh.boundary.corner_node_angle_threshold} degrees!")
-        if self.mesh.boundary.corner_nodes:
-            self.update_info_box(f"Corner nodes: {self.mesh.boundary.corner_nodes}")
+        # Evaluates the boundary of the mesh
+        corner_threshold = 130
+        boundary_vertices = self.mesh.evaluate_boundary(evaluate_corners=True, corner_threshold=corner_threshold)
+        num_boundary_nodes = self.mesh.boundary.num_nodes
+        num_boundary_corners = self.mesh.boundary.num_corners
 
-        boundary_vertices = self.mesh.trimesh.vertices[self.mesh.boundary.nodes]
+        self.update_info_box("The mesh boundary has been evaluated:")
+        self.update_info_box(f"\tDetected {num_boundary_nodes} boundary nodes!")
+        self.update_info_box(f"\tDetected {num_boundary_corners}" \
+                             + " corners with a threshold of" \
+                             + f" {corner_threshold} degrees!")
+
         point_actor = PointArrayActor(boundary_vertices[1:])
         point_actor.setColour()
         self.renWin.renderActor(point_actor)
