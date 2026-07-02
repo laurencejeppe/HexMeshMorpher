@@ -93,6 +93,35 @@ class Mesh(ABC):
         raise NotImplementedError
     
     @staticmethod
+    def resample_nodes(coords, num_nodes) -> np.ndarray:
+        """
+        Returns a numpy array of num_nodes coordinates that are evenly
+        spaced along the path that is created by successively traversing
+        the list of coordinates in coords.
+        The first and last coordinates of coords remain in the same place
+        and are included in the returned array.
+        coords is the array of coordinates of the nodes being resampled.
+        num_interp is the number of points you want for the interpolation.
+        """
+        # Cumulative Euclidean distance between successive polygon points.
+        # This will be the "x" for interpolation
+        d = np.cumsum(
+            np.r_[0, np.sqrt((np.diff(coords, axis=0) ** 2).sum(axis=1))]
+            )
+
+        # get linearly spaced points along the cumulative Euclidean distance
+        d_sampled = np.linspace(0, d.max(), num_nodes)
+
+        # interpolate x and y coordinates
+        interp_array = np.c_[
+            np.interp(d_sampled, d, coords[:, 0]),
+            np.interp(d_sampled, d, coords[:, 1]),
+            np.interp(d_sampled, d, coords[:, 2]),
+        ]
+
+        return interp_array
+    
+    @staticmethod
     def evaluate_corners(coords, angle_threshold: float = 130.0) -> np.ndarray:
         """
         Finds all the corners of a mesh defined by a certain angle threshold.
@@ -261,19 +290,26 @@ class TriMesh(Mesh):
         unique_edges = self.trimesh.edges[
             tr.grouping.group_rows(self.trimesh.edges_sorted, require_count=1)
         ]
+
         # Determine the unique nodes of the mesh that are on the boundary.
         unique_nodes = np.unique(unique_edges.flatten())
 
         # Arranging the boundary edges and nodes to be in order around the rim of the mesh.
-        boundary_paths = tr.path.exchange.misc.edges_to_path(unique_edges, self.trimesh.vertices)
-        bounary_line_entity = boundary_paths['entities'][0]
+        boundary_path_kwargs = tr.path.exchange.misc.edges_to_path(unique_edges,
+                                                                   self.trimesh.vertices)
+        
+        boundary_path = tr.path.Path3D(**boundary_path_kwargs) # All this does is convert the dict to path object
+        
+        boundary_line_entity = boundary_path.entities[0]
 
         # This ordered_nodes array contains the nodes that are on the boundary of the mesh in order.
         # This is important for the resampling of the boundary nodes to be done correctly.
         # The first and last nodes in the ordered_nodes array are the same node, so the array is closed.
-        ordered_nodes = np.array(bounary_line_entity.to_dict()['points'])
+        ordered_nodes = np.array(boundary_line_entity.to_dict()['points'])
 
-        if bounary_line_entity.closed:
+        print(boundary_path.discrete)
+
+        if boundary_line_entity.closed:
             print("Boundary is closed, making a complete circle")
 
         if set(ordered_nodes) == set(unique_nodes):
@@ -293,40 +329,11 @@ class TriMesh(Mesh):
         #self.boundary.num_nodes = len(self.boundary.nodes)
         #self.get_boundary_faces()
         #self.get_corners(angle_threshold=corner_threshold)
-        return self.trimesh.vertices[self.boundary.nodes], corner_node_coords if evaluate_corners else None
+        return self.trimesh.vertices[ordered_nodes], corner_node_coords if evaluate_corners else None
 
     def arrange_boundary(self) -> None:
         """ Arranges the boundary edges and nodes. """
-        self.arrange_boundary_edges()
         self.arrange_boundary_nodes()
-
-    def arrange_boundary_edges(self) -> np.ndarray:
-        """ Edges are stored in a nx2 numpy array. """
-        if self.boundary.edges is None:
-            self.get_boundary()
-        boundary_edges = self.boundary.edges
-
-        unsorted_edges = [[item for item in row] for row in boundary_edges]
-        sorted_edges = np.zeros(np.shape(boundary_edges), dtype=np.uint32)
-
-        sorted_edges[0, :] = boundary_edges[0, :]
-        del unsorted_edges[0]
-        index = 1
-        while len(unsorted_edges) > 0:
-            for edge in unsorted_edges:
-                if sorted_edges[index-1, 1] in edge:
-                    if edge[1] == sorted_edges[index-1, 1]:
-                        e = reversed(edge)
-                    else:
-                        e = edge
-                    for i, node_index in enumerate(e):
-                        sorted_edges[index, i] = node_index
-                    unsorted_edges.remove(edge)
-                    index += 1
-                    break
-        self.boundary.edges = sorted_edges
-        self.boundary.edges_sorted = True
-        return sorted_edges
 
     def arrange_boundary_nodes(self) -> np.ndarray:
         """ Arranges the nodes array to match the ordered list of edges. """
@@ -474,6 +481,8 @@ class TriMesh(Mesh):
                     )
 
         else:
+            # You can do this with a trimesh path object trimesh.path.traversal.resample_path()
+            # Might want to keep it as is so that I can use the resampling with a non-trimesh object
             coords = self.trimesh.vertices[boundary_nodes]
             coords = np.append(coords, [coords[0]], axis=0)
             interp_array = self.resample_nodes(coords, num_nodes + 1)
@@ -484,34 +493,6 @@ class TriMesh(Mesh):
         # self.boundary.interpollation_coords[:,1] = 360 # This offsets all the landmark coords at the boundary to a specific value. It assumes this is in the zx-plane so fixes y values.
         self.boundary.interpollation_num = num_nodes
         return self.boundary.interpollation_coords
-
-    def resample_nodes(self, coords, num_nodes) -> np.ndarray:
-        """
-        Returns a numpy array of num_nodes coordinates that are evenly
-        spaced along the path that is created by successively traversing
-        the list of coordinates in coords.
-        The first and last coordinates of coords remain in the same place
-        and are included in the returned array.
-        coords is the array of coordinates of the nodes being resampled.
-        num_interp is the number of points you want for the interpolation.
-        """
-        # Cumulative Euclidean distance between successive polygon points.
-        # This will be the "x" for interpolation
-        d = np.cumsum(
-            np.r_[0, np.sqrt((np.diff(coords, axis=0) ** 2).sum(axis=1))]
-            )
-
-        # get linearly spaced points along the cumulative Euclidean distance
-        d_sampled = np.linspace(0, d.max(), num_nodes)
-
-        # interpolate x and y coordinates
-        interp_array = np.c_[
-            np.interp(d_sampled, d, coords[:, 0]),
-            np.interp(d_sampled, d, coords[:, 1]),
-            np.interp(d_sampled, d, coords[:, 2]),
-        ]
-
-        return interp_array
 
     def scale_mesh(self, factor):
         """ Scales the mesh by a given factor. """
