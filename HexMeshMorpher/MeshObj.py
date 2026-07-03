@@ -291,6 +291,22 @@ class TriMesh(Mesh):
             f"found.\n\tEuler number = {self.trimesh.euler_number}"
             f"\n\tMesh contains {1-self.trimesh.euler_number} holes."
             )
+        
+        ordered_node_array = self.get_ordered_node_array()
+
+        self.boundary.nodes = ordered_node_array
+
+        if evaluate_corners:
+            corner_node_coords = self.evaluate_corners(coords=self.trimesh.vertices[ordered_node_array],
+                                                       angle_threshold=corner_threshold)
+
+        #self.boundary.edges = unique_edges
+        #self.boundary.nodes = np.unique(unique_edges.flatten())
+        #self.boundary.num_nodes = len(self.boundary.nodes)
+        #self.get_boundary_faces()
+        return self.trimesh.vertices[ordered_node_array], corner_node_coords if evaluate_corners else None
+    
+    def get_ordered_node_array(self, ):
         # Determine the unique edges of the mesh.
         # These are the edges that are only used by one face of the mesh.
         # These edges are the boundary edges of the mesh.
@@ -324,29 +340,29 @@ class TriMesh(Mesh):
         else:
             print("Boundary nodes are NOT the same as the boundary path points")
 
-        self.boundary.nodes = ordered_nodes
+        # Changing the starting node of the ordered list of nodes
+        instersect, intersecting_edge = self.find_intersecting_edge(unique_edges)
+        intersecting_edge_coords = self.trimesh.vertices[intersecting_edge]
 
-        if evaluate_corners:
-            corner_node_coords = self.evaluate_corners(coords=self.trimesh.vertices[ordered_nodes],
-                                                       angle_threshold=corner_threshold)
+        # TODO: This is hard coding and should not be maintained like this
+        if intersecting_edge_coords[0][2] >= 0.0:
+            start_node = intersecting_edge[0]
+        else:
+            start_node = intersecting_edge[1]
 
-        #self.boundary.edges = unique_edges
-        #self.boundary.nodes = np.unique(unique_edges.flatten())
-        #self.boundary.num_nodes = len(self.boundary.nodes)
-        #self.get_boundary_faces()
-        return self.trimesh.vertices[ordered_nodes], corner_node_coords if evaluate_corners else None
+        restarted_node_list = self.change_node_list_start(ordered_nodes[:-1], start_node)
+        restarted_node_list.append(restarted_node_list[0])
 
-    def get_boundary_faces(self) -> list:
-        """ Finds all the faces that have edges along the boundary. """
-        if self.boundary.nodes is None:
-            self.get_boundary()
-        boundary_faces = []
-        for i, face in enumerate(self.trimesh.faces):
-            for item in face:
-                if item in self.boundary.nodes and i not in boundary_faces:
-                    boundary_faces.append(i)
-        self.boundary.faces = boundary_faces
-        return boundary_faces
+        # Flipping the orientation of the list if it does not align with rotational axis
+        rotational_axis: np.ndarray = np.array([0.0, 1.0, 0.0])
+        coords = self.trimesh.vertices[restarted_node_list]
+        rotation = self.check_path_rotation_axis(coords)
+        if np.dot(rotation, rotational_axis) < 0:
+            # Rotation is left-handed about rotational_axis
+            restarted_node_list = np.flip(restarted_node_list)
+            print("Index array has been flipped to ensure right-handed rotation.")
+
+        return restarted_node_list
 
     def restarted_arranged_nodes(self, starting_point: np.ndarray,
                                  rotational_axis: np.ndarray = np.array([0.0, 1.0, 0.0])) -> np.ndarray:
@@ -400,23 +416,75 @@ class TriMesh(Mesh):
             "Rearranging indices has failed"
         )
         return new_node_list
+    
+    def change_coord_list_start(self, coord_list: np.ndarray, index: int):
+        [a1, a2] = np.split(coord_list, np.array([index]))
+        return np.concatenate((a1, a2, ))
 
     def find_the_point_of_intersection_with_xy_plane(self, coords: np.ndarray):
         """
         This will be a temporary hard coded option for defining where you want the start of the node array to be.
         Will find the point at which the array of coords crosses the xy-plane. (i.e. when z is zero)
         """
-        # TODO: Impliment this function
-        # Ignore values where x is negative
-
         # Find the consecutive node coords where the sign of z changes
+        intersect_points = None
+        index = 0
+        for coord_1, coord_2 in zip(coords[:-1], coords[1:]):
+            if coord_1[2]*coord_2[2] < 0 and coord_1[0] > 0:
+                intersect_points = [coord_1, coord_2]
+                break
+            index += 1
+
+        if intersect_points is None:
+            return None
+
+        point_1 = intersect_points[0]
+        point_2 = intersect_points[1]
 
         # Find the linear interpolation of these two points that intersects the xy-plane
-
-        coordinate = np.array([1,2,3])
+        z = 0.0
+        x = point_1[0] + (z - point_1[2])*(point_2[0] - point_1[0])/(point_2[2] - point_1[2])
+        y = point_1[1] + (z - point_1[2])*(point_2[1] - point_1[1])/(point_2[2] - point_1[2])
+        intersection = np.array([x, y, z])
+ 
         # This will need to be coupled with findng the node indices 
         # as well as defining a new start point for the node array based on this.
-        return coordinate
+        return intersection, intersect_points
+    
+    def find_intersecting_edge(self, edges):
+        intersecting_edge = None
+        edge_sections = []
+        for edge in edges:
+            coords = self.trimesh.vertices(edge)
+            if coords[0][0] < 0:
+                continue
+            [is_intersect, intersect] = self.is_intersection(coords[0], coords[1])
+            if is_intersect:
+                intersecting_edge = edge
+        return intersect, intersecting_edge
+
+    def is_intersection(self, point_1, point_2, plane_point=[0.0, 0.0, 0.0], plane_normal=[0.0, 0.0, 1.0]):
+        
+        p1 = np.array(point_1)
+        p2 = np.array(point_2)
+        p_point = np.array(plane_point)
+        p_normal = np.array(plane_normal)
+        
+        v = p2 - p1
+        dot_v_n = np.dot(v, p_normal)
+
+        if np.isclose(dot_v_n, 0.0):
+            if np.isclose(np.dot(p1 - p_point, p_normal), 0.0):
+                return True, p1
+            return False, None
+        
+        t = np.dot(p_point - p1, p_normal) / dot_v_n
+
+        if 0.0 <= t <= 1.0:
+            intersection_point = p1 + t * v
+            return True, intersection_point
+        
+        return False, None
 
     def check_path_rotation_axis(self, coords):
         normalised_coords = coords / np.linalg.norm(coords, axis=1)[:, None]
@@ -434,10 +502,12 @@ class TriMesh(Mesh):
         if not self.boundary.nodes_sorted:
             print("Warning! The boundary_nodes_sorted flag suggests the nodes are not sorted.")
 
-        # boundary_nodes = self.restarted_arranged_nodes(ccw_flag=ccw_flag)
-        boundary_nodes = self.boundary.nodes
-        coords = self.trimesh.vertices[boundary_nodes]
-        # coords = np.append(coords, [coords[0]], axis=0) # Already have the first and last node are the same
+        boundary_nodes = self.boundary.nodes[:-1]
+        coords = self.trimesh.vertices[boundary_nodes] 
+
+        intersect, intersecting_edge = self.find_intersecting_edge([boundary_nodes[0], boundary_nodes[-1]])
+        coords.prepend(intersect)
+        coords.append(intersect)
 
         if self.boundary.corner_nodes and not ignore_corners:
             # TODO: Adjust the nodes number to be representitive of the total
@@ -473,6 +543,7 @@ class TriMesh(Mesh):
         else:
             # You can do this with a trimesh path object trimesh.path.traversal.resample_path()
             # Might want to keep it as is so that I can use the resampling with a non-trimesh object
+
             interp_array = self.resample_nodes(coords, num_nodes + 1)
 
         self.boundary.interpollation_coords = interp_array[:-1]
