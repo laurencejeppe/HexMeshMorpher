@@ -268,6 +268,9 @@ class TriMesh(Mesh):
                        load=False)
         mesh.trimesh = self.trimesh.copy()
         return mesh
+    
+    def get_boundary_nodes(self):
+        return self.boundary.nodes[:-1]
 
     def evaluate_boundary(self,
                           evaluate_corners: bool = False,
@@ -296,14 +299,11 @@ class TriMesh(Mesh):
 
         self.boundary.nodes = ordered_node_array
 
+        evaluate_corners = False
         if evaluate_corners:
             corner_node_coords = self.evaluate_corners(coords=self.trimesh.vertices[ordered_node_array],
                                                        angle_threshold=corner_threshold)
 
-        #self.boundary.edges = unique_edges
-        #self.boundary.nodes = np.unique(unique_edges.flatten())
-        #self.boundary.num_nodes = len(self.boundary.nodes)
-        #self.get_boundary_faces()
         return self.trimesh.vertices[ordered_node_array], corner_node_coords if evaluate_corners else None
     
     def get_ordered_node_array(self, ):
@@ -345,13 +345,14 @@ class TriMesh(Mesh):
         intersecting_edge_coords = self.trimesh.vertices[intersecting_edge]
 
         # TODO: This is hard coding and should not be maintained like this
-        if intersecting_edge_coords[0][2] >= 0.0:
-            start_node = intersecting_edge[0]
-        else:
-            start_node = intersecting_edge[1]
+        #print(intersecting_edge_coords)
+        #if intersecting_edge_coords[0][2] >= 0.0:
+        #    start_node = intersecting_edge[0]
+        #else:
+        start_node = intersecting_edge[0]
 
         restarted_node_list = self.change_node_list_start(ordered_nodes[:-1], start_node)
-        restarted_node_list.append(restarted_node_list[0])
+        restarted_node_list = np.append(restarted_node_list, restarted_node_list[0])
 
         # Flipping the orientation of the list if it does not align with rotational axis
         rotational_axis: np.ndarray = np.array([0.0, 1.0, 0.0])
@@ -411,7 +412,7 @@ class TriMesh(Mesh):
     def change_node_list_start(self, node_list: np.ndarray, start_node: int):
         index = np.where(node_list == start_node)[0][0]
         [a1, a2] = np.split(node_list, np.array([index]))
-        new_node_list = np.concatenate((a1, a2, ), dtype=np.uint32)
+        new_node_list = np.concatenate((a2, a1, ))
         assert set(new_node_list) == set(node_list), (
             "Rearranging indices has failed"
         )
@@ -455,7 +456,7 @@ class TriMesh(Mesh):
         intersecting_edge = None
         edge_sections = []
         for edge in edges:
-            coords = self.trimesh.vertices(edge)
+            coords = self.trimesh.vertices[edge]
             if coords[0][0] < 0:
                 continue
             [is_intersect, intersect] = self.is_intersection(coords[0], coords[1])
@@ -503,11 +504,11 @@ class TriMesh(Mesh):
             print("Warning! The boundary_nodes_sorted flag suggests the nodes are not sorted.")
 
         boundary_nodes = self.boundary.nodes[:-1]
-        coords = self.trimesh.vertices[boundary_nodes] 
+        coords = self.trimesh.vertices[boundary_nodes]
 
-        intersect, intersecting_edge = self.find_intersecting_edge([boundary_nodes[0], boundary_nodes[-1]])
-        coords.prepend(intersect)
-        coords.append(intersect)
+        is_intersection, intersect = self.is_intersection(coords[0], coords[-1])
+        if is_intersection:
+            coords = np.vstack([intersect, coords, intersect])
 
         if self.boundary.corner_nodes and not ignore_corners:
             # TODO: Adjust the nodes number to be representitive of the total
@@ -548,7 +549,7 @@ class TriMesh(Mesh):
 
         self.boundary.interpollation_coords = interp_array[:-1]
         # You should only do this if your edge is very close to the value your a fixing it as.
-        # self.boundary.interpollation_coords[:,1] = 360 # This offsets all the landmark coords at the boundary to a specific value. It assumes this is in the zx-plane so fixes y values.
+        self.boundary.interpollation_coords[:,1] = 360 # This offsets all the landmark coords at the boundary to a specific value. It assumes this is in the zx-plane so fixes y values.
         self.boundary.interpollation_num = num_nodes
         return self.boundary.interpollation_coords
 

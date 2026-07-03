@@ -545,7 +545,8 @@ class Amberg_Mapping(QMainWindow):
 
         if l: # This shouldn't be the way of doing this, but it works for now
             # You should have the option here of getting landmarks pairs from a file
-            source_vertex_count = len(source.get_boundary())
+            source_boundary_nodes = source.get_boundary_nodes()
+            source_vertex_count = len(source_boundary_nodes)
             if self.manual_landmark_selection_box.isChecked():
                 lpairs = self.manual_landmark_selection()
                 if lpairs is None:
@@ -560,10 +561,10 @@ class Amberg_Mapping(QMainWindow):
                 #source_vertex_count = len(source.get_boundary())
                 lpairs = [
                     [
-                        source.boundary.nodes[i],
+                        source_node,
                         [target.boundary.interpollation_coords[i,j] for j in range(3)]
                     ]
-                    for i in range(len(source.boundary.nodes))
+                    for i, source_node in enumerate(source_boundary_nodes)
                     ]
             else:
                 #source_vertex_count = len(source.get_boundary())
@@ -895,7 +896,7 @@ class LandmarkFinder(QMainWindow):
                              + " corners with a threshold of" \
                              + f" {corner_threshold} degrees!")
 
-        point_actor = PointArrayActor(boundary_vertices[1:])
+        point_actor = PointArrayActor(boundary_vertices[1:-1])
         point_actor.setColour()
         self.renWin.renderActor(point_actor)
         first_node = [boundary_vertices[0]]
