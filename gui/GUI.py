@@ -6,6 +6,7 @@ Created on Wed Apr  5 19:29:14 2023
 """
 
 import sys
+import colorsys
 import os
 from PyQt6.QtCore import (Qt, pyqtSignal, QThread)
 from PyQt6.QtGui import (QIcon, QAction)
@@ -197,9 +198,9 @@ class MeshMorpherGUI(QMainWindow):
         file_folder = os.path.join(*file_folder_list)
         file_name = file_path[:-4].split('/')[-1]
 
-        if file_path[-4:] == '.inp':
+        if file_path[-4:].lower() == '.inp':
             mesh = INPMesh(file_name, file_name, file_folder)
-        elif file_path[-4:] == '.stl':
+        elif file_path[-4:].lower() == '.stl':
             mesh = TriMesh(file_name, file_name, file_folder)
         else:
             show_message("Mesh selection has failed")
@@ -885,28 +886,54 @@ class LandmarkFinder(QMainWindow):
         # Evaluates the boundary of the mesh
         corners_flag: bool = True
         corner_threshold: float = 130.0
-        [boundary_vertices, corner_vertices] = self.mesh.evaluate_boundary(evaluate_corners=corners_flag,
-                                                        corner_threshold=corner_threshold)
-        num_boundary_nodes = len(boundary_vertices)
-        num_boundary_corners = len(corner_vertices) if corner_vertices is not None else 0
+        self.mesh.evaluate_boundary(evaluate_corners=corners_flag,
+                                    corner_threshold=corner_threshold)
+        boundary_vertices, corners_vertices = self.mesh.get_boundary_coords()
+        num_boundaries = len(boundary_vertices)
+
+        # Visuals
+        boundary_node_colours = [
+            {"main":[1.0, 0.0, 0.0],
+             "first":[0.5, 0.5, 0.0],
+             "corner":[0.5, 0.0, 0.5]},
+            {"main":[0.0, 1.0, 0.0],
+             "first":[0.5, 0.5, 0.0],
+             "corner":[0.0, 0.5, 0.5]},
+            {"main":[0.0, 0.0, 1.0],
+             "first":[0.5, 0.0, 0.5],
+             "corner":[0.0, 0.5, 0.5]},
+            ]
 
         self.update_info_box("The mesh boundary has been evaluated:")
-        self.update_info_box(f"\tDetected {num_boundary_nodes} boundary nodes!")
-        self.update_info_box(f"\tDetected {num_boundary_corners}" \
+        self.update_info_box(f"\tDetected {num_boundaries} boundaries!")
+        for i, boundary in enumerate(boundary_vertices):
+            colour = boundary_node_colours[i]
+            corner_vertices = corners_vertices[i]
+            self.update_info_box(f"\tBoundary {i}:")
+            num_boundary_nodes = len(boundary)
+            self.update_info_box(f"\t\tDetected {num_boundary_nodes} boundary nodes!")
+            num_boundary_corners = len(corner_vertices) if corner_vertices is not None else 0
+            self.update_info_box(f"\t\tDetected {num_boundary_corners}" \
                              + " corners with a threshold of" \
                              + f" {corner_threshold} degrees!")
-
-        point_actor = PointArrayActor(boundary_vertices[1:-1])
-        point_actor.setColour()
-        self.renWin.renderActor(point_actor)
-        first_node = [boundary_vertices[0]]
-        first_node_actor = PointArrayActor(first_node)
-        first_node_actor.setColour([0.0, 0.0, 1.0])
-        self.renWin.renderActor(first_node_actor)
-        if corner_vertices is not None:
-            corner_actor = PointArrayActor(corner_vertices)
-            corner_actor.setColour([0.0, 1.0, 0.0])
-            self.renWin.renderActor(corner_actor)
+        
+            ## Visuals
+            # TODO: Make this a colour gradient so you can see the start, end, and direction
+            colour = boundary_node_colours[i]
+            # Main boundary nodes
+            point_actor = PointArrayActor(boundary[1:])
+            point_actor.setColour(colour['main'])
+            self.renWin.renderActor(point_actor)
+            # First node
+            first_node = [boundary[0]]
+            first_node_actor = PointArrayActor(first_node)
+            first_node_actor.setColour(colour['first'])
+            self.renWin.renderActor(first_node_actor)
+            # Corner nodes
+            if corner_vertices is not None:
+                corner_actor = PointArrayActor(corner_vertices)
+                corner_actor.setColour(colour['corner'])
+                self.renWin.renderActor(corner_actor)
 
     def resample_boundary_nodes(self):
         """ Resamples the boundary nodes to a given node count. """
