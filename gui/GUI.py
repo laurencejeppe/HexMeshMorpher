@@ -381,21 +381,90 @@ class AmbergMappingDialogTabbed(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Amberg Mapping")
         self.setModal(True)
-        self.main_layout = QGridLayout()
+        self.parent = parent
+        self.files = parent.files
+        self.WDIR = parent.WDIR
+
+        self.target: TriMesh = None
+        self.source: TriMesh = None
+
+        main_layout = QGridLayout()
 
         self.tab_widget = QTabWidget()
-        random_btn = QPushButton("Button")
-        self.tab_widget.addTab(random_btn, "First Tab")
-        # TODO: You need to have a process of selecting meshes first
-        self.landmarks_tab = LandmarkFinderDialog()
-        self.tab_widget.addTab(self.landmarks_tab, "Landmarks")
+        
+        amberg_loop_options = AmbergMappingLoopOptionsWidget()
+        self.tab_widget.addTab(amberg_loop_options, "Iteration Options")
 
-        self.main_layout.addWidget(self.tab_widget)
+        amberg_options = AmbergMappingOptionsWidget()
+        self.tab_widget.addTab(amberg_options, "Main Options")
 
-        self.setLayout(self.main_layout)
+        main_layout.addWidget(self.tab_widget)
+
+        self.setLayout(main_layout)
+
+        self.select_meshes()
+
+    def select_meshes(self):
+        mesh_selection_dialog = AmbergMeshSelectionDialog(self)
+        if mesh_selection_dialog.exec():
+            self.source = mesh_selection_dialog.get_source()
+            self.target = mesh_selection_dialog.get_target()
+            self.create_layouts()
+        else:
+            self.reject()
+
+    def create_layouts(self):
+        source_landmarks_tab = LandmarkFinderWidget(self.source)
+        self.tab_widget.addTab(source_landmarks_tab, "Source Landmarks")
+        target_landmarks_tab = LandmarkFinderWidget(self.target)
+        self.tab_widget.addTab(target_landmarks_tab, "Target Landmarks")
 
     def initiate_amberg_mapping(self):
         pass
+
+class AmbergMeshSelectionDialog(QDialog):
+    """Dialog box for selecting the meshes you want to use as the target and source."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Select Input Meshes")
+        self.files = parent.files
+
+        main_layout = QGridLayout()
+
+        # Source mesh selection
+        source_text = QLabel("Source Mesh")
+        main_layout.addWidget(source_text, 0, 0)
+        self.source_input = QComboBox()
+        self.source_input.addItems(self.files)
+        self.setStyleSheet("QComboBox {text-align: center;}")
+        main_layout.addWidget(self.source_input, 0, 1)
+
+        # Target mesh selection
+        target_text = QLabel("Target Mesh")
+        main_layout.addWidget(target_text, 1, 0)
+        self.target_input = QComboBox()
+        self.target_input.addItems(self.files)
+        main_layout.addWidget(self.target_input, 1, 1)
+
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+
+        main_layout.addWidget(button_box)
+
+        self.setLayout(main_layout)
+
+    def get_source(self) -> TriMesh:
+        source = self.files[self.source_input.currentText()]
+        return source
+
+    def get_target(self) -> TriMesh:
+        target = self.files[self.target_input.currentText()]
+        return target
+
 
 class AmbergMappingLoopOptionsWidget(QWidget):
     """Widget the shows the option for the amberg mapping in an editable table."""
