@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QGridLayout, QMessageBox, QLineEdit, QLabel,
                              QHeaderView, QDoubleSpinBox, QSpinBox,
                              QAbstractSpinBox, QStyle, QDialog, QProgressBar,
-                             QTextEdit, QDialogButtonBox)
+                             QTextEdit, QDialogButtonBox, QTabWidget)
 
 import numpy as np
 import vtk
@@ -99,6 +99,8 @@ class MeshMorpherGUI(QMainWindow):
                                triggered=self.close)
         self.runAmberg = QAction(QIcon('open.png'), 'Run Amberg',
                                  self, triggered=self.run_amberg_mapping)
+        self.runAmberg2 = QAction(QIcon('open.png'), 'Run Amberg v2',
+                                 self, triggered=self.run_amberg_mapping2)
         self.runRBF = QAction(QIcon("open.png"), 'Run RBF Morpher',
                               self, triggered=self.run_rbf_morpher)
         self.findLandmarks = QAction(QIcon("open.png"), 'Find Landmakrs',
@@ -118,6 +120,7 @@ class MeshMorpherGUI(QMainWindow):
         self.fileMenu.addAction(self.exitAct)
         self.toolsMenu = self.menuBar().addMenu("&Tools")
         self.toolsMenu.addAction(self.runAmberg)
+        self.toolsMenu.addAction(self.runAmberg2)
         self.toolsMenu.addAction(self.runRBF)
         self.toolsMenu.addAction(self.findLandmarks)
 
@@ -206,7 +209,7 @@ class MeshMorpherGUI(QMainWindow):
             show_message("Mesh selection has failed")
             return
 
-        self.open_mesh_dialog = Mesh_Options_Dialog(mesh, self)
+        self.open_mesh_dialog = MeshOptionsDialog(mesh, self)
         self.open_mesh_dialog.accepted.connect(self.add_mesh_to_file_manager)
         self.open_mesh_dialog.exec()
 
@@ -266,7 +269,11 @@ class MeshMorpherGUI(QMainWindow):
             self.file_manager.deleteRow(row)
 
     def run_amberg_mapping(self):
-        self.amberg_nricp = Amberg_Mapping(self)
+        self.amberg_nricp = AmbergMappingDialog(self)
+        self.amberg_nricp.show()
+
+    def run_amberg_mapping2(self):
+        self.amberg_nricp = AmbergMappingDialogTabbed(self) # AmbergMappingDialog(self) is the old version
         self.amberg_nricp.show()
 
     def run_rbf_morpher(self):
@@ -292,13 +299,15 @@ class MeshMorpherGUI(QMainWindow):
             show_message(message="Landmark finder is currently only supported for STL meshes!",
                          title="Item Selection Error")
             return
-        self.landmark_finder = LandmarkFinder(mesh=mesh, parent=self)
+        self.landmark_finder = LandmarkFinderDialog(mesh=mesh, parent=self)
         self.landmark_finder.show()
 
 
-class Mesh_Options_Dialog(QDialog):
+class MeshOptionsDialog(QDialog):
+    """This is opened when you import a mesh and allows you to make some adjustments."""
     def __init__(self, mesh:Mesh, parent = None):
         super().__init__(parent)
+        self.setModal(True)
 
         self.mesh = mesh
 
@@ -337,10 +346,10 @@ class Mesh_Options_Dialog(QDialog):
             self.main_layout.addWidget(self.convert_to_stl)
 
         QBtn = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        self.buttonBox = QDialogButtonBox(QBtn)
-        self.buttonBox.accepted.connect(self.accept)
-        self.buttonBox.rejected.connect(self.reject)
-        self.main_layout.addWidget(self.buttonBox)
+        self.button_box = QDialogButtonBox(QBtn)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        self.main_layout.addWidget(self.button_box)
 
         self.setLayout(self.main_layout)
 
@@ -366,18 +375,34 @@ class Mesh_Options_Dialog(QDialog):
 
         return self.mesh
 
-class Amberg_Mapping(QMainWindow):
+class AmbergMappingDialogTabbed(QDialog):
+    """Creates a QDilog to perform the amberg mapping algorithm."""
     def __init__(self, parent = None):
         super().__init__(parent)
         self.setWindowTitle("Amberg Mapping")
-        self.main_widget = QWidget()
-        self.setCentralWidget(self.main_widget)
-        self.parent = parent
-        self.files = parent.files
-        self.WDIR = parent.WDIR
+        self.setModal(True)
+        self.main_layout = QGridLayout()
 
+        self.tab_widget = QTabWidget()
+        random_btn = QPushButton("Button")
+        self.tab_widget.addTab(random_btn, "First Tab")
+        # TODO: You need to have a process of selecting meshes first
+        self.landmarks_tab = LandmarkFinderDialog()
+        self.tab_widget.addTab(self.landmarks_tab, "Landmarks")
+
+        self.main_layout.addWidget(self.tab_widget)
+
+        self.setLayout(self.main_layout)
+
+    def initiate_amberg_mapping(self):
+        pass
+
+class AmbergMappingLoopOptionsWidget(QWidget):
+    """Widget the shows the option for the amberg mapping in an editable table."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
         # Table to view loop options
-        self.layout = QGridLayout()
+        self.main_layout = QGridLayout()
         self.table = QTableWidget()
         self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(['Stiffness',
@@ -388,7 +413,7 @@ class Amberg_Mapping(QMainWindow):
         self.set_step_table_defaults()
         self.table.horizontalHeader().setCascadingSectionResizes(True)
         self.set_step_table_sizing()
-        self.layout.addWidget(self.table, 0, 0)
+        self.main_layout.addWidget(self.table, 0, 0)
 
         # Buttons to edit table
         self.table_edit_layout = QVBoxLayout()
@@ -398,79 +423,13 @@ class Amberg_Mapping(QMainWindow):
         self.del_loop_btn = QPushButton("Delete Loop")
         self.del_loop_btn.clicked.connect(self.del_loop)
         self.table_edit_layout.addWidget(self.del_loop_btn)
-        #self.edit_loop_btn = QPushButton("Edit Loop")
-        #self.table_edit_layout.addWidget(self.edit_loop_btn)
         self.table_edit_layout.addStretch()
-        self.layout.addLayout(self.table_edit_layout, 0, 1)
+        self.main_layout.addLayout(self.table_edit_layout, 0, 1)
 
-        # Options with checkboxes
-        self.options_layout = QGridLayout()
-        self.use_faces = QCheckBox()
-        self.use_faces.setText("Use Faces")
-        self.options_layout.addWidget(self.use_faces, 0, 0)
-        self.use_faces.setChecked(True)
-        self.use_landmarks = QCheckBox()
-        self.use_landmarks.setText("Use Landmarks")
-        self.options_layout.addWidget(self.use_landmarks, 0, 1)
-        self.manual_landmark_selection_box = QCheckBox()
-        self.manual_landmark_selection_box.setText("Manual Landmark Selection")
-        self.options_layout.addWidget(self.manual_landmark_selection_box, 0, 2)
-        self.epsilon_text = QLabel("Epsilon")
-        self.options_layout.addWidget(self.epsilon_text, 1, 0)
-        self.epsilon_edit = QDoubleSpinBox()
-        self.epsilon_edit.setDecimals(5)
-        self.epsilon_edit.setRange(0.00001, 0.1)
-        self.epsilon_edit.setValue(0.001)
-        self.epsilon_edit.setStepType(QAbstractSpinBox.StepType.AdaptiveDecimalStepType)
-        self.options_layout.addWidget(self.epsilon_edit, 1, 1)
-        self.gamma_text = QLabel("Gamma")
-        self.options_layout.addWidget(self.gamma_text, 2, 0)
-        self.gamma_edit = QSpinBox()
-        self.gamma_edit.setRange(1, 100)
-        self.gamma_edit.setValue(1)
-        self.options_layout.addWidget(self.gamma_edit, 2, 1)
-        self.neighbors_text = QLabel("Neighbors")
-        self.options_layout.addWidget(self.neighbors_text, 3, 0)
-        self.neighbors_edit = QSpinBox()
-        self.neighbors_edit.setRange(1, 99)
-        self.neighbors_edit.setValue(8)
-        self.options_layout.addWidget(self.neighbors_edit, 3, 1)
-        self.distance_text = QLabel("Distance Threshold")
-        self.options_layout.addWidget(self.distance_text, 4, 0)
-        self.distance_edit = QDoubleSpinBox()
-        self.distance_edit.setDecimals(2)
-        self.distance_edit.setRange(0.01, 1)
-        self.distance_edit.setValue(0.1)
-        self.options_layout.addWidget(self.distance_edit, 4, 1)
-        self.source_text = QLabel("Source Mesh")
-        self.options_layout.addWidget(self.source_text, 5, 0)
-        self.source = QComboBox()
-        self.source.addItems(self.files)
-        self.setStyleSheet("QComboBox {text-align: center;}")
-        self.options_layout.addWidget(self.source, 5, 1)
-        self.target_text = QLabel("Target Mesh")
-        self.options_layout.addWidget(self.target_text, 6, 0)
-        self.target = QComboBox()
-        self.target.addItems(self.files)
-        self.options_layout.addWidget(self.target, 6, 1)
-
-        self.layout.addLayout(self.options_layout, 1, 0)
-
-        self.run_amberg_btn = QPushButton("Run Amberg Mapping")
-        self.run_amberg_btn.clicked.connect(self.initiate_amberg)
-        self.layout.addWidget(self.run_amberg_btn, 2, 0)
-
-        # TODO: Have this as a pop up window that prevents you from doing
-        # other things while the amberg mapping is taking place.
-        self.progress_bar = QProgressBar(self)
-        self.progress_bar.setRange(0,1)
-        self.layout.addWidget(self.progress_bar, 3, 0)
-
-        self.main_widget.setLayout(self.layout)
-
-        self.resize(530,450)
+        self.setLayout(self.main_layout)
 
     def set_step_table_defaults(self) -> None:
+        """Sets the default values for the amberg mapping."""
         step_defaults = [
             [0.01, 0, 0.5, 10],
             [0.02, 2, 0.5, 10],
@@ -484,6 +443,7 @@ class Amberg_Mapping(QMainWindow):
                 self.table.setItem(r,c,QTableWidgetItem(str(item)))
 
     def set_step_table_sizing(self):
+        """Adjusts the sizing of the table with the amberg parameters."""
         self.table.resizeColumnsToContents()
         self.table.horizontalHeader() \
             .setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -493,6 +453,7 @@ class Amberg_Mapping(QMainWindow):
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
     def add_loop(self):
+        """Adds a loop to the amberg ICP algorithm."""
         default_row = [0.01, 0, 0.5, 10]
         if self.table.currentRow():
             row = self.table.currentRow()
@@ -503,13 +464,133 @@ class Amberg_Mapping(QMainWindow):
             self.table.setItem(row, i, QTableWidgetItem(str(item)))
 
     def del_loop(self):
+        """Removes a loop from the amberg ICP algorithm."""
         if self.table.currentRow():
             self.table.removeRow(self.table.currentRow())
         else:
             show_message(message="Please select a row to be deleted first!",
                          title="Delete Loop Error")
 
+class AmbergMappingOptionsWidget(QWidget):
+    """Widget for determining the specific options for amberg mapping. """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        options_layout = QGridLayout()
+        # Use faces option
+        self.use_faces = QCheckBox()
+        self.use_faces.setText("Use Faces")
+        self.use_faces.setChecked(True)
+        options_layout.addWidget(self.use_faces, 0, 0)
+        # Use landmarks option TODO: Get rid of this
+        self.use_landmarks = QCheckBox()
+        self.use_landmarks.setText("Use Landmarks")
+        options_layout.addWidget(self.use_landmarks, 0, 1)
+        # Epsilon value option
+        epsilon_text = QLabel("Epsilon")
+        options_layout.addWidget(epsilon_text, 1, 0)
+        self.epsilon_edit = QDoubleSpinBox()
+        self.epsilon_edit.setDecimals(5)
+        self.epsilon_edit.setRange(0.00001, 0.1)
+        self.epsilon_edit.setValue(0.001)
+        self.epsilon_edit.setStepType(QAbstractSpinBox.StepType.AdaptiveDecimalStepType)
+        options_layout.addWidget(self.epsilon_edit, 1, 1)
+        # Gamma value option
+        gamma_text = QLabel("Gamma")
+        options_layout.addWidget(gamma_text, 2, 0)
+        self.gamma_edit = QSpinBox()
+        self.gamma_edit.setRange(1, 100)
+        self.gamma_edit.setValue(1)
+        options_layout.addWidget(self.gamma_edit, 2, 1)
+        # Neighbours value option
+        neighbors_text = QLabel("Neighbors")
+        options_layout.addWidget(neighbors_text, 3, 0)
+        self.neighbors_edit = QSpinBox()
+        self.neighbors_edit.setRange(1, 99)
+        self.neighbors_edit.setValue(8)
+        options_layout.addWidget(self.neighbors_edit, 3, 1)
+        # Distance threshold option
+        distance_text = QLabel("Distance Threshold")
+        options_layout.addWidget(distance_text, 4, 0)
+        self.distance_edit = QDoubleSpinBox()
+        self.distance_edit.setDecimals(2)
+        self.distance_edit.setRange(0.01, 1)
+        self.distance_edit.setValue(0.1)
+        options_layout.addWidget(self.distance_edit, 4, 1)
+
+        self.setLayout(options_layout)
+
+    def get_options(self):
+        """Gets all the current options and returns a dictionary with the options."""
+        e = float(self.epsilon_edit.value()) if self.epsilon_edit.hasAcceptableInput() else 0.001
+        g = float(self.gamma_edit.text()) if self.gamma_edit.hasAcceptableInput() else 1
+        n = int(self.neighbors_edit.text()) if self.neighbors_edit.hasAcceptableInput() else 8
+        d = float(self.distance_edit.text()) if self.distance_edit.hasAcceptableInput() else 0.1
+        f = self.use_faces.isChecked()
+        l = self.use_landmarks.isChecked()
+
+        options = {
+            'gamma':g,
+            'epsilon':e,
+            'neighbors':n,
+            'distance_threshold':d,
+            'use_faces':f,
+            'use_landmarks':l,
+        }
+
+        return options
+
+class AmbergMappingDialog(QDialog):
+    """Creates a new window to perform the amberg mapping algorithm."""
+    def __init__(self, parent = None):
+        super().__init__(parent)
+        self.setWindowTitle("Amberg Mapping")
+        self.setModal(True)
+        self.parent = parent
+        self.files = parent.files
+        self.WDIR = parent.WDIR
+
+        self.main_layout = QVBoxLayout()
+
+        # Table to view loop options
+        self.loop_options_widget = AmbergMappingLoopOptionsWidget()
+        self.main_layout.addWidget(self.loop_options_widget)
+
+        # Options with checkboxes
+        self.options_widget = AmbergMappingOptionsWidget(self)
+        self.main_layout.addWidget(self.options_widget)
+
+        # Source mesh selection
+        source_text = QLabel("Source Mesh")
+        self.main_layout.addWidget(source_text)
+        self.source = QComboBox()
+        self.source.addItems(self.files)
+        self.setStyleSheet("QComboBox {text-align: center;}")
+        self.main_layout.addWidget(self.source)
+
+        # Target mesh selection
+        target_text = QLabel("Target Mesh")
+        self.main_layout.addWidget(target_text)
+        self.target = QComboBox()
+        self.target.addItems(self.files)
+        self.main_layout.addWidget(self.target)
+
+        # Run amberg
+        self.run_amberg_btn = QPushButton("Run Amberg Mapping")
+        self.run_amberg_btn.clicked.connect(self.initiate_amberg)
+        self.main_layout.addWidget(self.run_amberg_btn)
+
+        # TODO: Have this as a pop up window that prevents you from doing
+        # other things while the amberg mapping is taking place.
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setRange(0,1)
+        self.main_layout.addWidget(self.progress_bar)
+
+        self.setLayout(self.main_layout)
+
+        self.resize(530,450)
+
     def initiate_amberg(self):
+        """Gets the information from settings and gives these inputs to a thread that runs the amberg ICP algorithm."""
         if self.source.count() < 2:
             show_message(message="You need at least two meshes to perform an Amberg Mapping!",
                          title="Mesh Error")
@@ -537,17 +618,15 @@ class Amberg_Mapping(QMainWindow):
         for row in range(rows):
             for col in range(4):
                 steps[row][col] = float(self.table.item(row, col).text())
-        e = float(self.epsilon_edit.value()) if self.epsilon_edit.hasAcceptableInput() else 0.001
-        g = float(self.gamma_edit.text()) if self.gamma_edit.hasAcceptableInput() else 1
-        n = int(self.neighbors_edit.text()) if self.neighbors_edit.hasAcceptableInput() else 8
-        d = float(self.distance_edit.text()) if self.distance_edit.hasAcceptableInput() else 0.1
-        f = self.use_faces.isChecked()
-        l = self.use_landmarks.isChecked()
 
-        if l: # This shouldn't be the way of doing this, but it works for now
+        options = self.options_widget.get_options()
+
+        if options["use_landmarks"]:
+            # This shouldn't be the way of doing this, but it works for now
             # You should have the option here of getting landmarks pairs from a file
             source_boundary_nodes = source.get_boundary_nodes()
             source_vertex_count = len(source_boundary_nodes)
+            # This shouldn't be addressed here
             if self.manual_landmark_selection_box.isChecked():
                 lpairs = self.manual_landmark_selection()
                 if lpairs is None:
@@ -577,15 +656,6 @@ class Amberg_Mapping(QMainWindow):
                 return
         else:
             lpairs = []
-
-        options = {
-            'gamma':g,
-            'epsilon':e,
-            'neighbors':n,
-            'distance_threshold':d,
-            'use_faces':f,
-            'use_landmarks':l,
-        }
 
         self.thread: AmbergThread = AmbergThread(source=source,
                                    target=target,
@@ -718,7 +788,7 @@ class RBF_Morpher(QMainWindow):
             show_message(message="You need at least two meshes to generate a coefficient matrix!",
                          title="Mesh Error")
             return
-        
+
         unmapped: TriMesh = self.files[self.unmapped.currentText()]
         mapped: TriMesh = self.files[self.mapped.currentText()]
         self.morpher.set_original_mesh(unmapped)
@@ -816,7 +886,18 @@ class RBF_Thread(QThread):
 
         self.taskFinished.emit(self.morphee)
 
-class LandmarkFinder(QMainWindow):
+class LandmarkFinderDialog(QDialog):
+    """Dialog for finding mesh landmarks"""
+    def __init__(self, mesh:TriMesh, parent=None):
+        super().__init__(parent)
+        self.setModal(True)
+        self.setWindowTitle("Landmark Finder")
+        main_layout = QGridLayout()
+        landmark_finder_widget = LandmarkFinderWidget(mesh)
+        main_layout.addWidget(landmark_finder_widget)
+        self.setLayout(main_layout)
+
+class LandmarkFinderWidget(QWidget):
     """ A class of QMainWindow that handles the automatic detection of
     boundary nodes in a mesh that could be used as langmark nodes in the
     amberg morphing algorithm. 
@@ -825,9 +906,6 @@ class LandmarkFinder(QMainWindow):
     """
     def __init__(self, mesh:TriMesh, parent = None):
         super().__init__(parent)
-        self.setWindowTitle("Landmark Finder")
-        self.main_widget = QWidget()
-        self.setCentralWidget(self.main_widget)
         self.parent = parent
 
         self.mesh = mesh
@@ -869,16 +947,11 @@ class LandmarkFinder(QMainWindow):
         self.main_layout.addLayout(self.button_layout, 1, 1)
 
 
-        self.main_widget.setLayout(self.main_layout)
+        self.setLayout(self.main_layout)
 
         self.resize(750,600)
 
         self.display_mesh()
-
-        # TODO: Change layout parameters to allow for the window to be bigger
-        # without messing up the look
-
-        # TODO: Add visualisation of the boundary resampling or boundary evaluation
 
     def evaluate_boundary(self):
         """ Evaluates the boundary of the mesh and stores these parameters
@@ -916,7 +989,7 @@ class LandmarkFinder(QMainWindow):
             self.update_info_box(f"\t\tDetected {num_boundary_corners}" \
                              + " corners with a threshold of" \
                              + f" {corner_threshold} degrees!")
-        
+
             ## Visuals
             # TODO: Make this a colour gradient so you can see the start, end, and direction
             colour = boundary_node_colours[i]
@@ -943,7 +1016,7 @@ class LandmarkFinder(QMainWindow):
                                           ignore_corners=self.ignore_corners_flag.isChecked())
         self.update_info_box(f"Mesh boundary has been resampled to give \
                              coordinates of {num_nodes}.")
-        
+
         boundary_vertices = self.mesh.boundary.interpollation_coords
         point_actor = PointArrayActor(boundary_vertices[1:])
         point_actor.setColour([1.0, 1.0, 0.0])
@@ -972,7 +1045,7 @@ class LandmarkFinder(QMainWindow):
         tform = vtk.vtkTransform()
         tform.PostMultiply()
         mesh_actor.SetUserTransform(tform)
-        
+
         self.renWin.renderActor(mesh_actor)
         self.renWin.addTriad(mesh_actor)
 
@@ -983,6 +1056,7 @@ class progressBar(QMainWindow):
         # TODO: Set this up to be a pop up window that comes up when the
         # amberg or RBF morphers are running the program to prevent the user
         # from doing anything else with the application.
+        # TODO: have a look at QProgressDialog
         pass
 
 
