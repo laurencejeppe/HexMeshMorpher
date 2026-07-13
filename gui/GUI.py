@@ -27,7 +27,10 @@ from HexMeshMorpher.amberg_mapping import AmbergMapping
 from HexMeshMorpher.RBF_morpher import (
     RBFMorpher, custom_RBF
 )
-from HexMeshMorpher.vis.vis import qtVtkWindow, vtkRenWin, MeshActor, PointArrayActor
+from HexMeshMorpher.vis.vis import (
+    qtVtkWindow, vtkRenWin, MeshActor, PointArrayActor,
+    AnnotationActor
+)
 
 
 
@@ -73,6 +76,13 @@ class MeshMorpherGUI(QMainWindow):
         self.find_landmarks_btn = QPushButton("Find Landmarks")
         self.find_landmarks_btn.clicked.connect(self.find_landmarks)
         self.options_layout.addWidget(self.find_landmarks_btn)
+
+        # Temp button for loading meshes
+        #######################################################
+        self.temp_load_meshes_btn = QPushButton("Load Test Meshes")
+        self.temp_load_meshes_btn.clicked.connect(self.load_temp_meshes)
+        self.options_layout.addWidget(self.temp_load_meshes_btn)
+        #######################################################
 
         self.options_layout.addStretch()
         self.layout.addLayout(self.options_layout)
@@ -170,6 +180,27 @@ class MeshMorpherGUI(QMainWindow):
             if not f_path:
                 return
             self.files[item].save_mesh(file_path=f_path)
+
+    def load_temp_meshes(self):
+        base_folder = os.getcwd()
+        folder = os.path.join(base_folder, "Meshes")
+
+        meshes = {
+            "Source Mesh":"Temp_Source_Mesh",
+            "Target Mesh":"Temp_Target_Mesh",
+        }
+        for name, f_name in meshes.items():
+            mesh = TriMesh(name, f_name, folder)
+            self.files[mesh.f_name] = mesh
+            mesh_obj = self.files[mesh.f_name]
+            self.file_manager.addRow(mesh.f_name, mesh_obj)
+            self.filesDrop.append(mesh.f_name)
+        
+        inp_mesh = INPMesh("INP Mesh", "Temp_INP_Mesh", folder)
+        self.files[inp_mesh.f_name] = inp_mesh
+        mesh_obj = self.files[inp_mesh.f_name]
+        self.file_manager.addRow(inp_mesh.f_name, mesh_obj)
+        self.filesDrop.append(inp_mesh.f_name)
             
     def load_mesh_dialog(self, stl=False, inp=False):
         """
@@ -387,37 +418,40 @@ class AmbergMappingDialogTabbed(QDialog):
 
         self.target: TriMesh = None
         self.source: TriMesh = None
-
-        main_layout = QGridLayout()
-
-        self.tab_widget = QTabWidget()
         
+        main_layout = QVBoxLayout()
         amberg_loop_options = AmbergMappingLoopOptionsWidget()
-        self.tab_widget.addTab(amberg_loop_options, "Iteration Options")
-
+        main_layout.addWidget(amberg_loop_options)
         amberg_options = AmbergMappingOptionsWidget()
-        self.tab_widget.addTab(amberg_options, "Main Options")
+        main_layout.addWidget(amberg_options)
 
-        main_layout.addWidget(self.tab_widget)
+        select_landmarks_btn = QPushButton("Select Landmarks")
+        select_landmarks_btn.clicked.connect(self.select_landmarks)
+        main_layout.addWidget(select_landmarks_btn)
 
         self.setLayout(main_layout)
 
         self.select_meshes()
+        #self.resize(700,600)
 
     def select_meshes(self):
         mesh_selection_dialog = AmbergMeshSelectionDialog(self)
         if mesh_selection_dialog.exec():
             self.source = mesh_selection_dialog.get_source()
             self.target = mesh_selection_dialog.get_target()
-            self.create_layouts()
+            #self.create_layouts()
         else:
             self.reject()
 
-    def create_layouts(self):
-        source_landmarks_tab = LandmarkFinderWidget(self.source)
-        self.tab_widget.addTab(source_landmarks_tab, "Source Landmarks")
-        target_landmarks_tab = LandmarkFinderWidget(self.target)
-        self.tab_widget.addTab(target_landmarks_tab, "Target Landmarks")
+    def select_landmarks(self):
+        landmark_selection_dialog = LandmarkSelectionDialog(self.source, self.target)
+        landmark_selection_dialog.exec()
+
+    #def create_layouts(self):
+    #    source_landmarks_tab = LandmarkFinderWidget(self.source)
+    #    self.tab_widget.addTab(source_landmarks_tab, "Source Landmarks")
+    #    target_landmarks_tab = LandmarkFinderWidget(self.target)
+    #    self.tab_widget.addTab(target_landmarks_tab, "Target Landmarks")
 
     def initiate_amberg_mapping(self):
         pass
@@ -544,6 +578,10 @@ class AmbergMappingOptionsWidget(QWidget):
     """Widget for determining the specific options for amberg mapping. """
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        main_Layout = QVBoxLayout()
+
+
         options_layout = QGridLayout()
         # Use faces option
         self.use_faces = QCheckBox()
@@ -966,6 +1004,21 @@ class LandmarkFinderDialog(QDialog):
         main_layout.addWidget(landmark_finder_widget)
         self.setLayout(main_layout)
 
+class LandmarkSelectionDialog(QDialog):
+    def __init__(self, source:TriMesh, target:TriMesh, parent=None):
+        super().__init__(parent)
+        self.setModal(True)
+        self.setWindowTitle("Landmark Selection")
+        main_layout = QGridLayout()
+        source_boundary_evaluation = LandmarkFinderWidget(source, self)
+        main_layout.addWidget(source_boundary_evaluation, 0, 0)
+        #target_boundary_evaluation = LandmarkFinderWidget(target, self)
+        #main_layout.addWidget(target_boundary_evaluation, 0, 1)
+
+        self.setLayout(main_layout)
+
+        # TODO: Add output of evaluations and how you want to match up the boundaries
+
 class LandmarkFinderWidget(QWidget):
     """ A class of QMainWindow that handles the automatic detection of
     boundary nodes in a mesh that could be used as langmark nodes in the
@@ -995,36 +1048,27 @@ class LandmarkFinderWidget(QWidget):
         self.evaluate_boundary_btn = QPushButton("Evaluate Mesh Boundary")
         self.evaluate_boundary_btn.clicked.connect(self.evaluate_boundary)
         self.button_layout.addWidget(self.evaluate_boundary_btn)
-        self.num_nodes_label = QLabel("Number of Resampled Nodes")
-        self.button_layout.addWidget(self.num_nodes_label)
-        self.num_nodes_selector = QSpinBox()
-        self.num_nodes_selector.setRange(1, 1000)
-        self.num_nodes_selector.setValue(76)
-        self.button_layout.addWidget(self.num_nodes_selector)
-        self.ccw_flag = QCheckBox("Counter-Clockwise Resampling")
-        self.button_layout.addWidget(self.ccw_flag)
-        self.ignore_corners_flag = QCheckBox("Ignore Corners")
-        self.button_layout.addWidget(self.ignore_corners_flag)
-        self.resample_boundary_btn = QPushButton("Resample Mesh Boundary")
-        self.resample_boundary_btn.clicked.connect(self.resample_boundary_nodes)
-        self.button_layout.addWidget(self.resample_boundary_btn)
-        self.info_box = QLabel("")
-        self.info_box.setWordWrap(True)
-        self.button_layout.addWidget(self.info_box)
+
         self.button_layout.addStretch()
 
         self.main_layout.addLayout(self.button_layout, 1, 1)
 
+        self.info_box = QLabel("")
+        self.info_box.setWordWrap(True)
+        self.main_layout.addWidget(self.info_box, 2, 0)
 
         self.setLayout(self.main_layout)
 
-        self.resize(750,600)
+        self.resize(800,600)
 
         self.display_mesh()
 
     def evaluate_boundary(self):
         """ Evaluates the boundary of the mesh and stores these parameters
         in the .boundary."""
+        # Reset render window
+        self.renWin.renderer.RemoveAllViewProps()
+        self.display_mesh()
         # Evaluates the boundary of the mesh
         corners_flag: bool = True
         corner_threshold: float = 130.0
@@ -1033,8 +1077,68 @@ class LandmarkFinderWidget(QWidget):
         boundary_vertices, corners_vertices = self.mesh.get_boundary_coords()
         num_boundaries = len(boundary_vertices)
 
+        self.update_info_box("The mesh boundary has been evaluated:")
+        self.update_info_box(f"\tDetected {num_boundaries} boundaries!")
+        for i, boundary in enumerate(boundary_vertices):
+            corner_vertices = corners_vertices[i]
+            self.update_info_box(f"\tBoundary B{i+1}:")
+            num_boundary_nodes = len(boundary)
+            self.update_info_box(f"\t\tDetected {num_boundary_nodes} boundary nodes!")
+            num_boundary_corners = len(corner_vertices) if corner_vertices is not None else 0
+            self.update_info_box(f"\t\tDetected {num_boundary_corners}" \
+                             + " corners with a threshold of" \
+                             + f" {corner_threshold} degrees!")
+
+            ## Visuals
+            # TODO: Make this a colour gradient so you can see the start, end, and direction
+            annotation = {"location":np.mean(boundary, axis=0),
+                      "text":f"B{i+1}"}
+            self.visualise_boundary(boundary, index=i,
+                                    corners=corner_vertices, annotation=annotation)
+            
+        self.display_resampling_options()
+
+    def display_resampling_options(self):
+        self.num_nodes_label = QLabel("Number of Resampled Nodes")
+        self.button_layout.insertWidget(1, self.num_nodes_label)
+        self.num_nodes_selector = QSpinBox()
+        self.num_nodes_selector.setRange(1, 1000)
+        self.num_nodes_selector.setValue(75)
+
+        self.boundary_selector = QSpinBox()
+        self.num_nodes_selector.setRange(1, 1000)
+        self.num_nodes_selector.setValue(76)
+        self.button_layout.insertWidget(2, self.num_nodes_selector)
+        self.ccw_flag = QCheckBox("Counter-Clockwise Resampling")
+        self.button_layout.insertWidget(3, self.ccw_flag)
+        self.ignore_corners_flag = QCheckBox("Ignore Corners")
+        self.button_layout.insertWidget(4, self.ignore_corners_flag)
+        self.resample_boundary_btn = QPushButton("Resample Mesh Boundary")
+        self.resample_boundary_btn.clicked.connect(self.resample_boundary_nodes)
+        self.button_layout.insertWidget(5, self.resample_boundary_btn)
+
+    def resample_boundary_nodes(self):
+        """ Resamples the boundary nodes to a given node count. """
+        self.renWin.renderer.RemoveAllViewProps()
+        self.display_mesh()
+
+        num_nodes = self.num_nodes_selector.value()
+        
+        boundary_index = 0
+        boundary_vertices = self.mesh.resample_boundary_nodes(num_nodes,
+                                          ccw_flag=self.ccw_flag.isChecked(),
+                                          ignore_corners=self.ignore_corners_flag.isChecked(),
+                                          boundary_index=boundary_index)
+        self.update_info_box(f"Mesh boundary has been resampled to give \
+                             coordinates of {num_nodes}.")
+
+        annotation = {"location":np.mean(boundary_vertices, axis=0),
+                      "text":f"B{boundary_index+1}"}
+        self.visualise_boundary(boundary_vertices, index=boundary_index, annotation=annotation)
+
+    def visualise_boundary(self, vertices, index=0, corners=None, annotation=None):
         # Visuals
-        boundary_node_colours = [
+        colours = [
             {"main":[1.0, 0.0, 0.0],
              "first":[0.5, 0.5, 0.0],
              "corner":[0.5, 0.0, 0.5]},
@@ -1045,55 +1149,22 @@ class LandmarkFinderWidget(QWidget):
              "first":[0.5, 0.0, 0.5],
              "corner":[0.0, 0.5, 0.5]},
             ]
-
-        self.update_info_box("The mesh boundary has been evaluated:")
-        self.update_info_box(f"\tDetected {num_boundaries} boundaries!")
-        for i, boundary in enumerate(boundary_vertices):
-            colour = boundary_node_colours[i]
-            corner_vertices = corners_vertices[i]
-            self.update_info_box(f"\tBoundary {i}:")
-            num_boundary_nodes = len(boundary)
-            self.update_info_box(f"\t\tDetected {num_boundary_nodes} boundary nodes!")
-            num_boundary_corners = len(corner_vertices) if corner_vertices is not None else 0
-            self.update_info_box(f"\t\tDetected {num_boundary_corners}" \
-                             + " corners with a threshold of" \
-                             + f" {corner_threshold} degrees!")
-
-            ## Visuals
-            # TODO: Make this a colour gradient so you can see the start, end, and direction
-            colour = boundary_node_colours[i]
-            # Main boundary nodes
-            point_actor = PointArrayActor(boundary[1:])
-            point_actor.setColour(colour['main'])
-            self.renWin.renderActor(point_actor)
-            # First node
-            first_node = [boundary[0]]
-            first_node_actor = PointArrayActor(first_node)
-            first_node_actor.setColour(colour['first'])
-            self.renWin.renderActor(first_node_actor)
-            # Corner nodes
-            if corner_vertices is not None:
-                corner_actor = PointArrayActor(corner_vertices)
-                corner_actor.setColour(colour['corner'])
-                self.renWin.renderActor(corner_actor)
-
-    def resample_boundary_nodes(self):
-        """ Resamples the boundary nodes to a given node count. """
-        num_nodes = self.num_nodes_selector.value()
-        self.mesh.resample_boundary_nodes(num_nodes,
-                                          ccw_flag=self.ccw_flag.isChecked(),
-                                          ignore_corners=self.ignore_corners_flag.isChecked())
-        self.update_info_box(f"Mesh boundary has been resampled to give \
-                             coordinates of {num_nodes}.")
-
-        boundary_vertices = self.mesh.boundary.interpollation_coords
-        point_actor = PointArrayActor(boundary_vertices[1:])
-        point_actor.setColour([1.0, 1.0, 0.0])
-        self.renWin.renderActor(point_actor)
-        first_node = [boundary_vertices[0]]
-        first_node_actor = PointArrayActor(first_node)
-        first_node_actor.setColour([0.0, 1.0, 0.0])
+        colour = colours[index]
+        main_boundary_actor = PointArrayActor(vertices[1:])
+        main_boundary_actor.setColour(colour["main"])
+        self.renWin.renderActor(main_boundary_actor)
+        first_node_actor = PointArrayActor([vertices[0]])
+        first_node_actor.setColour(colour["first"])
         self.renWin.renderActor(first_node_actor)
+        if corners is not None:
+            corner_node_actor = PointArrayActor(corners)
+            corner_node_actor.setColour(colour["corner"])
+            self.renWin.renderActor(corner_node_actor)
+        if annotation is not None:
+            annotation_actor = AnnotationActor(annotation['location'],
+                                               annotation['text'])
+            self.renWin.renderActor(annotation_actor)
+        
 
     def update_info_box(self, new_text):
         """ Adds a String to the info box to give a message about function completion to the user.

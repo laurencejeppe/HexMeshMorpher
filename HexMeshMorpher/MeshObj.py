@@ -532,12 +532,15 @@ class TriMesh(Mesh):
         axis /= np.linalg.norm(axis)
         return axis
 
+    def get_resampled_boundary_nodes(self, index:int=None):
+        return self.boundary[index].interpolation_coords
+
     def resample_boundary_nodes(self, num_nodes, ccw_flag: bool = False,
-                                ignore_corners: bool = False):
+                                ignore_corners: bool = False, boundary_index: int=0,
+                                fixed_y: float=None):
         """
         Interpolates the points around a polygon.
         """
-        boundary_index = 0
         # TODO: make so that this resampling does the resampling across all the boundaries.
         assert self.boundaries[boundary_index].nodes is not None, ("No boundary nodes are present")
         if not self.boundaries[boundary_index].nodes_sorted:
@@ -589,7 +592,8 @@ class TriMesh(Mesh):
 
         self.boundaries[boundary_index].interpollation_coords = interp_array[:-1]
         # You should only do this if your edge is very close to the value your a fixing it as.
-        self.boundaries[boundary_index].interpollation_coords[:,1] = 360 # This offsets all the landmark coords at the boundary to a specific value. It assumes this is in the zx-plane so fixes y values.
+        if fixed_y is not None:
+            self.boundaries[boundary_index].interpollation_coords[:,1] = fixed_y # This offsets all the landmark coords at the boundary to a specific value. It assumes this is in the zx-plane so fixes y values.
         self.boundaries[boundary_index].interpollation_num = num_nodes
         return self.boundaries[boundary_index].interpollation_coords
 

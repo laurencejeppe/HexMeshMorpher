@@ -26,6 +26,7 @@ class RBFMorpher:
         #    and hasattr(original_mesh, 'trimesh')
         #):
         #    RBF, original_mesh, displaced_mesh = displaced_mesh, RBF, original_mesh
+        # This commented section might be important for running the tests that I included on GitHub
 
         self.RBF = RBF
         self.use_multithread = use_multithread

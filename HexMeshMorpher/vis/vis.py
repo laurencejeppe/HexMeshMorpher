@@ -157,3 +157,16 @@ class PointArrayActor(vtk.vtkActor):
     def setColour(self, colour=[1.0, 0.0, 0.0]):
         self.GetProperty().SetColor(colour)
 
+class AnnotationActor(vtk.vtkBillboardTextActor3D):
+    def __init__(self, location, text:str):
+        self.SetInput(text)
+        self.SetPosition(*location)
+
+        text_properties = self.GetTextProperty()
+        text_properties.SetColor(0,0,0)
+        text_properties.SetFontSize(30)
+        text_properties.SetJustificationToCentered()
+        text_properties.SetVerticalJustificationToCentered()
+
+        
+
