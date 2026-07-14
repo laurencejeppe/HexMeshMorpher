@@ -1009,133 +1009,43 @@ class LandmarkSelectionDialog(QDialog):
         super().__init__(parent)
         self.setModal(True)
         self.setWindowTitle("Landmark Selection")
-        main_layout = QGridLayout()
-        source_boundary_evaluation = LandmarkFinderWidget(source, self)
-        main_layout.addWidget(source_boundary_evaluation, 0, 0)
-        #target_boundary_evaluation = LandmarkFinderWidget(target, self)
-        #main_layout.addWidget(target_boundary_evaluation, 0, 1)
+        main_layout = QVBoxLayout()
+
+        mesh_layout = QHBoxLayout()
+        source_boundary_evaluation = LandmarkVTKWidget(source, self)
+        source_boundary_evaluation.evaluate_boundary()
+        mesh_layout.addWidget(source_boundary_evaluation)
+        target_boundary_evaluation = LandmarkVTKWidget(target, self)
+        mesh_layout.addWidget(target_boundary_evaluation)
+
+
+        main_layout.addLayout(mesh_layout)
 
         self.setLayout(main_layout)
 
+        self.resize(600, 600)
+
         # TODO: Add output of evaluations and how you want to match up the boundaries
 
-class LandmarkFinderWidget(QWidget):
-    """ A class of QMainWindow that handles the automatic detection of
-    boundary nodes in a mesh that could be used as langmark nodes in the
-    amberg morphing algorithm. 
-    
-    The algorithms for this should potentially be within the MeshObj class.
+class LandmarkVTKWidget(QWidget):
     """
-    def __init__(self, mesh:TriMesh, parent = None):
+    """
+    def __init__(self, mesh:TriMesh, parent=None):
         super().__init__(parent)
-        self.parent = parent
-
         self.mesh = mesh
         self.boundary_nodes = None
+
+        main_layout = QGridLayout()
 
         # Visualisation of the mesh
         self.vtkWidget = qtVtkWindow()
         self.renWin = self.vtkWidget._RenderWindow
         self.renWin.setBackground([0.6,0.6,0.6])
 
-        self.main_layout = QGridLayout()
-        self.mesh_name_label = QLabel(self.mesh.f_name)
-        self.main_layout.addWidget(self.mesh_name_label, 0, 0)
+        main_layout.addWidget(self.vtkWidget)
 
-        self.main_layout.addWidget(self.vtkWidget, 1, 0)
-
-        self.button_layout = QVBoxLayout()
-        self.evaluate_boundary_btn = QPushButton("Evaluate Mesh Boundary")
-        self.evaluate_boundary_btn.clicked.connect(self.evaluate_boundary)
-        self.button_layout.addWidget(self.evaluate_boundary_btn)
-
-        self.button_layout.addStretch()
-
-        self.main_layout.addLayout(self.button_layout, 1, 1)
-
-        self.info_box = QLabel("")
-        self.info_box.setWordWrap(True)
-        self.main_layout.addWidget(self.info_box, 2, 0)
-
-        self.setLayout(self.main_layout)
-
-        self.resize(800,600)
-
-        self.display_mesh()
-
-    def evaluate_boundary(self):
-        """ Evaluates the boundary of the mesh and stores these parameters
-        in the .boundary."""
-        # Reset render window
-        self.renWin.renderer.RemoveAllViewProps()
-        self.display_mesh()
-        # Evaluates the boundary of the mesh
-        corners_flag: bool = True
-        corner_threshold: float = 130.0
-        self.mesh.evaluate_boundary(evaluate_corners=corners_flag,
-                                    corner_threshold=corner_threshold)
-        boundary_vertices, corners_vertices = self.mesh.get_boundary_coords()
-        num_boundaries = len(boundary_vertices)
-
-        self.update_info_box("The mesh boundary has been evaluated:")
-        self.update_info_box(f"\tDetected {num_boundaries} boundaries!")
-        for i, boundary in enumerate(boundary_vertices):
-            corner_vertices = corners_vertices[i]
-            self.update_info_box(f"\tBoundary B{i+1}:")
-            num_boundary_nodes = len(boundary)
-            self.update_info_box(f"\t\tDetected {num_boundary_nodes} boundary nodes!")
-            num_boundary_corners = len(corner_vertices) if corner_vertices is not None else 0
-            self.update_info_box(f"\t\tDetected {num_boundary_corners}" \
-                             + " corners with a threshold of" \
-                             + f" {corner_threshold} degrees!")
-
-            ## Visuals
-            # TODO: Make this a colour gradient so you can see the start, end, and direction
-            annotation = {"location":np.mean(boundary, axis=0),
-                      "text":f"B{i+1}"}
-            self.visualise_boundary(boundary, index=i,
-                                    corners=corner_vertices, annotation=annotation)
-            
-        self.display_resampling_options()
-
-    def display_resampling_options(self):
-        self.num_nodes_label = QLabel("Number of Resampled Nodes")
-        self.button_layout.insertWidget(1, self.num_nodes_label)
-        self.num_nodes_selector = QSpinBox()
-        self.num_nodes_selector.setRange(1, 1000)
-        self.num_nodes_selector.setValue(75)
-
-        self.boundary_selector = QSpinBox()
-        self.num_nodes_selector.setRange(1, 1000)
-        self.num_nodes_selector.setValue(76)
-        self.button_layout.insertWidget(2, self.num_nodes_selector)
-        self.ccw_flag = QCheckBox("Counter-Clockwise Resampling")
-        self.button_layout.insertWidget(3, self.ccw_flag)
-        self.ignore_corners_flag = QCheckBox("Ignore Corners")
-        self.button_layout.insertWidget(4, self.ignore_corners_flag)
-        self.resample_boundary_btn = QPushButton("Resample Mesh Boundary")
-        self.resample_boundary_btn.clicked.connect(self.resample_boundary_nodes)
-        self.button_layout.insertWidget(5, self.resample_boundary_btn)
-
-    def resample_boundary_nodes(self):
-        """ Resamples the boundary nodes to a given node count. """
-        self.renWin.renderer.RemoveAllViewProps()
-        self.display_mesh()
-
-        num_nodes = self.num_nodes_selector.value()
+        self.setLayout(main_layout)
         
-        boundary_index = 0
-        boundary_vertices = self.mesh.resample_boundary_nodes(num_nodes,
-                                          ccw_flag=self.ccw_flag.isChecked(),
-                                          ignore_corners=self.ignore_corners_flag.isChecked(),
-                                          boundary_index=boundary_index)
-        self.update_info_box(f"Mesh boundary has been resampled to give \
-                             coordinates of {num_nodes}.")
-
-        annotation = {"location":np.mean(boundary_vertices, axis=0),
-                      "text":f"B{boundary_index+1}"}
-        self.visualise_boundary(boundary_vertices, index=boundary_index, annotation=annotation)
-
     def visualise_boundary(self, vertices, index=0, corners=None, annotation=None):
         # Visuals
         colours = [
@@ -1164,17 +1074,6 @@ class LandmarkFinderWidget(QWidget):
             annotation_actor = AnnotationActor(annotation['location'],
                                                annotation['text'])
             self.renWin.renderActor(annotation_actor)
-        
-
-    def update_info_box(self, new_text):
-        """ Adds a String to the info box to give a message about function completion to the user.
-
-        Args:
-            new_text (String): Message to be added to the info box display
-        """
-        info_box_text = self.info_box.text()
-        info_box_text += (new_text + '\n')
-        self.info_box.setText(info_box_text)
 
     def display_mesh(self):
         """
@@ -1188,6 +1087,167 @@ class LandmarkFinderWidget(QWidget):
 
         self.renWin.renderActor(mesh_actor)
         self.renWin.addTriad(mesh_actor)
+
+    def reset_display(self):
+        self.renWin.renderer.RemoveAllViewProps()
+        self.display_mesh()
+
+    def evaluate_boundary(self):
+        """ Evaluates the boundary of the mesh and stores these parameters
+        in the .boundary."""
+        # Reset render window
+        self.vtk_widget.reset_display()
+        # Evaluates the boundary of the mesh
+        corners_flag: bool = True
+        corner_threshold: float = 130.0
+        self.mesh.evaluate_boundary(evaluate_corners=corners_flag,
+                                    corner_threshold=corner_threshold)
+        boundary_vertices, corners_vertices = self.mesh.get_boundary_coords()
+        num_boundaries = len(boundary_vertices)
+
+        self.update_info_box("The mesh boundary has been evaluated:")
+        self.update_info_box(f"\tDetected {num_boundaries} boundaries!")
+        for i, boundary in enumerate(boundary_vertices):
+            corner_vertices = corners_vertices[i]
+            self.update_info_box(f"\tBoundary B{i+1}:")
+            num_boundary_nodes = len(boundary)
+            self.update_info_box(f"\t\tDetected {num_boundary_nodes} boundary nodes!")
+            num_boundary_corners = len(corner_vertices) if corner_vertices is not None else 0
+            self.update_info_box(f"\t\tDetected {num_boundary_corners}" \
+                             + " corners with a threshold of" \
+                             + f" {corner_threshold} degrees!")
+
+            ## Visuals
+            # TODO: Make this a colour gradient so you can see the start, end, and direction
+            annotation = {"location":np.mean(boundary, axis=0),
+                      "text":f"B{i+1}"}
+            self.vtk_widget.visualise_boundary(boundary, index=i,
+                                    corners=corner_vertices, annotation=annotation)
+
+
+class LandmarkFinderWidget(QWidget):
+    """ A class of QMainWindow that handles the automatic detection of
+    boundary nodes in a mesh that could be used as langmark nodes in the
+    amberg morphing algorithm. 
+    
+    The algorithms for this should potentially be within the MeshObj class.
+    """
+    def __init__(self, mesh:TriMesh, parent = None):
+        super().__init__(parent)
+        self.parent = parent
+
+        self.mesh = mesh
+        self.boundary_nodes = None
+
+        # Visualisation of the mesh
+        self.vtk_widget = LandmarkVTKWidget(self.mesh, self)
+
+        self.main_layout = QGridLayout()
+        self.mesh_name_label = QLabel(self.mesh.f_name)
+        self.main_layout.addWidget(self.mesh_name_label, 0, 0)
+
+        self.main_layout.addWidget(self.vtk_widget, 1, 0)
+
+        self.button_layout = QVBoxLayout()
+        self.evaluate_boundary_btn = QPushButton("Evaluate Mesh Boundary")
+        self.evaluate_boundary_btn.clicked.connect(self.evaluate_boundary)
+        self.button_layout.addWidget(self.evaluate_boundary_btn)
+
+        self.button_layout.addStretch()
+
+        self.main_layout.addLayout(self.button_layout, 1, 1)
+
+        self.info_box = QLabel("")
+        self.info_box.setWordWrap(True)
+        self.main_layout.addWidget(self.info_box, 2, 0)
+
+        self.setLayout(self.main_layout)
+
+        #self.resize(800,600)
+
+        self.vtk_widget.display_mesh()
+
+    def evaluate_boundary(self):
+        """ Evaluates the boundary of the mesh and stores these parameters
+        in the .boundary."""
+        # Reset render window
+        self.vtk_widget.reset_display()
+        # Evaluates the boundary of the mesh
+        corners_flag: bool = True
+        corner_threshold: float = 130.0
+        self.mesh.evaluate_boundary(evaluate_corners=corners_flag,
+                                    corner_threshold=corner_threshold)
+        boundary_vertices, corners_vertices = self.mesh.get_boundary_coords()
+        num_boundaries = len(boundary_vertices)
+
+        self.update_info_box("The mesh boundary has been evaluated:")
+        self.update_info_box(f"\tDetected {num_boundaries} boundaries!")
+        for i, boundary in enumerate(boundary_vertices):
+            corner_vertices = corners_vertices[i]
+            self.update_info_box(f"\tBoundary B{i+1}:")
+            num_boundary_nodes = len(boundary)
+            self.update_info_box(f"\t\tDetected {num_boundary_nodes} boundary nodes!")
+            num_boundary_corners = len(corner_vertices) if corner_vertices is not None else 0
+            self.update_info_box(f"\t\tDetected {num_boundary_corners}" \
+                             + " corners with a threshold of" \
+                             + f" {corner_threshold} degrees!")
+
+            ## Visuals
+            # TODO: Make this a colour gradient so you can see the start, end, and direction
+            annotation = {"location":np.mean(boundary, axis=0),
+                      "text":f"B{i+1}"}
+            self.vtk_widget.visualise_boundary(boundary, index=i,
+                                    corners=corner_vertices, annotation=annotation)
+            
+        self.display_resampling_options()
+
+    def display_resampling_options(self):
+        self.num_nodes_label = QLabel("Number of Resampled Nodes")
+        self.button_layout.insertWidget(1, self.num_nodes_label)
+        self.num_nodes_selector = QSpinBox()
+        self.num_nodes_selector.setRange(1, 1000)
+        self.num_nodes_selector.setValue(75)
+
+        self.boundary_selector = QSpinBox()
+        self.num_nodes_selector.setRange(1, 1000)
+        self.num_nodes_selector.setValue(76)
+        self.button_layout.insertWidget(2, self.num_nodes_selector)
+        self.ccw_flag = QCheckBox("Counter-Clockwise Resampling")
+        self.button_layout.insertWidget(3, self.ccw_flag)
+        self.ignore_corners_flag = QCheckBox("Ignore Corners")
+        self.button_layout.insertWidget(4, self.ignore_corners_flag)
+        self.resample_boundary_btn = QPushButton("Resample Mesh Boundary")
+        self.resample_boundary_btn.clicked.connect(self.resample_boundary_nodes)
+        self.button_layout.insertWidget(5, self.resample_boundary_btn)
+
+    def resample_boundary_nodes(self):
+        """ Resamples the boundary nodes to a given node count. """
+        self.vtk_widget.reset_display()
+
+        num_nodes = self.num_nodes_selector.value()
+        
+        boundary_index = 0
+        boundary_vertices = self.mesh.resample_boundary_nodes(num_nodes,
+                                          ccw_flag=self.ccw_flag.isChecked(),
+                                          ignore_corners=self.ignore_corners_flag.isChecked(),
+                                          boundary_index=boundary_index)
+        self.update_info_box(f"Mesh boundary has been resampled to give \
+                             coordinates of {num_nodes}.")
+
+        annotation = {"location":np.mean(boundary_vertices, axis=0),
+                      "text":f"B{boundary_index+1}"}
+        self.vtk_widget.visualise_boundary(boundary_vertices, index=boundary_index, annotation=annotation)
+        
+
+    def update_info_box(self, new_text):
+        """ Adds a String to the info box to give a message about function completion to the user.
+
+        Args:
+            new_text (String): Message to be added to the info box display
+        """
+        info_box_text = self.info_box.text()
+        info_box_text += (new_text + '\n')
+        self.info_box.setText(info_box_text)
 
 
 class progressBar(QMainWindow):
