@@ -28,10 +28,9 @@ from HexMeshMorpher.RBF_morpher import (
     RBFMorpher, custom_RBF
 )
 from HexMeshMorpher.vis.vis import (
-    qtVtkWindow, vtkRenWin, MeshActor, PointArrayActor,
+    qtVtkWindow, MeshActor, PointArrayActor,
     AnnotationActor
 )
-
 
 
 class MeshMorpherGUI(QMainWindow):
@@ -406,6 +405,7 @@ class MeshOptionsDialog(QDialog):
 
         return self.mesh
 
+
 class AmbergMappingDialogTabbed(QDialog):
     """Creates a QDilog to perform the amberg mapping algorithm."""
     def __init__(self, parent = None):
@@ -445,7 +445,8 @@ class AmbergMappingDialogTabbed(QDialog):
 
     def select_landmarks(self):
         landmark_selection_dialog = LandmarkSelectionDialog(self.source, self.target)
-        landmark_selection_dialog.exec()
+        if landmark_selection_dialog.exec():
+            print("Yes!!!")
 
     #def create_layouts(self):
     #    source_landmarks_tab = LandmarkFinderWidget(self.source)
@@ -455,6 +456,7 @@ class AmbergMappingDialogTabbed(QDialog):
 
     def initiate_amberg_mapping(self):
         pass
+
 
 class AmbergMeshSelectionDialog(QDialog):
     """Dialog box for selecting the meshes you want to use as the target and source."""
@@ -574,6 +576,7 @@ class AmbergMappingLoopOptionsWidget(QWidget):
             show_message(message="Please select a row to be deleted first!",
                          title="Delete Loop Error")
 
+
 class AmbergMappingOptionsWidget(QWidget):
     """Widget for determining the specific options for amberg mapping. """
     def __init__(self, parent=None):
@@ -645,6 +648,7 @@ class AmbergMappingOptionsWidget(QWidget):
         }
 
         return options
+
 
 class AmbergMappingDialog(QDialog):
     """Creates a new window to perform the amberg mapping algorithm."""
@@ -799,6 +803,7 @@ class AmbergMappingDialog(QDialog):
         print(lpairs)
         return lpairs
 
+
 class AmbergThread(QThread):
     taskFinished = pyqtSignal(object)
 
@@ -821,6 +826,7 @@ class AmbergThread(QThread):
                                           options=self.options,
                                           lpairs=self.lpairs)
         self.taskFinished.emit(AM)
+
 
 class RBF_Morpher(QMainWindow):
     def __init__(self, parent = None):
@@ -975,6 +981,7 @@ class RBF_Morpher(QMainWindow):
         self.parent.filesDrop.append(result.f_name)
         self.close()
 
+
 class RBF_Thread(QThread):
     """ Thread for processing RBF tasks. """
     taskFinished = pyqtSignal(object)
@@ -993,6 +1000,7 @@ class RBF_Thread(QThread):
 
         self.taskFinished.emit(self.morphee)
 
+
 class LandmarkFinderDialog(QDialog):
     """Dialog for finding mesh landmarks"""
     def __init__(self, mesh:TriMesh, parent=None):
@@ -1004,6 +1012,7 @@ class LandmarkFinderDialog(QDialog):
         main_layout.addWidget(landmark_finder_widget)
         self.setLayout(main_layout)
 
+
 class LandmarkSelectionDialog(QDialog):
     def __init__(self, source:TriMesh, target:TriMesh, parent=None):
         super().__init__(parent)
@@ -1012,12 +1021,37 @@ class LandmarkSelectionDialog(QDialog):
         main_layout = QVBoxLayout()
 
         mesh_layout = QHBoxLayout()
-        source_boundary_evaluation = LandmarkVTKWidget(source, self)
-        source_boundary_evaluation.evaluate_boundary()
-        mesh_layout.addWidget(source_boundary_evaluation)
-        target_boundary_evaluation = LandmarkVTKWidget(target, self)
-        mesh_layout.addWidget(target_boundary_evaluation)
+        # TODO: Bug fix, for some reason the vtk widgets don't let you move the mesh here
+        # But when you use the LandmarkVTKWidget from the other landmark finder they work fine.
+        source_vtk_widget = LandmarkVTKWidget(source, self)
+        index = 0
 
+        source_boundaries_vertices, source_boundaries_corner_vertices = self.evaluate_boundary(source)
+        #for source_boundary_vertices, source_corner_vertices in zip(source_boundaries_vertices,
+        #                                                            source_boundaries_corner_vertices):
+        #    annotation = {"location":np.mean(source_boundary_vertices, axis=0),
+        #                  "text":f"B{index+1}"}
+        #    source_vtk_widget.visualise_boundary(source_boundary_vertices,
+        #                                         index,
+        #                                         source_corner_vertices,
+        #                                         annotation)
+        #    index += 1
+        mesh_layout.addWidget(source_vtk_widget)
+
+        #target_vtk_widget = LandmarkVTKWidget(target, self)
+        #index = 0
+
+        #target_boundaries_vertices, target_boundaries_corner_vertices =  self.evaluate_boundary(target)
+        #for target_boundary_vertices, target_corner_vertices in zip(target_boundaries_vertices,
+        #                                                            target_boundaries_corner_vertices):
+        #    annotation = {"location":np.mean(source_boundary_vertices, axis=0),
+        #                  "text":f"B{index+1}"}
+        #    target_vtk_widget.visualise_boundary(target_boundary_vertices,
+        #                                         index,
+        #                                         target_corner_vertices,
+        #                                         annotation)
+        #    index += 1        
+        #mesh_layout.addWidget(target_vtk_widget)
 
         main_layout.addLayout(mesh_layout)
 
@@ -1026,6 +1060,19 @@ class LandmarkSelectionDialog(QDialog):
         self.resize(600, 600)
 
         # TODO: Add output of evaluations and how you want to match up the boundaries
+
+
+    def evaluate_boundary(self, mesh):
+        """ Evaluates the boundary of the mesh and stores these parameters
+        in the .boundary."""
+        # Evaluates the boundary of the mesh
+        corners_flag: bool = True
+        corner_threshold: float = 130.0
+        mesh.evaluate_boundary(evaluate_corners=corners_flag,
+                               corner_threshold=corner_threshold)
+        boundary_vertices, corners_vertices = mesh.get_boundary_coords()
+        return boundary_vertices, corners_vertices
+
 
 class LandmarkVTKWidget(QWidget):
     """
@@ -1041,6 +1088,8 @@ class LandmarkVTKWidget(QWidget):
         self.vtkWidget = qtVtkWindow()
         self.renWin = self.vtkWidget._RenderWindow
         self.renWin.setBackground([0.6,0.6,0.6])
+
+        self.display_mesh()
 
         main_layout.addWidget(self.vtkWidget)
 
@@ -1091,38 +1140,6 @@ class LandmarkVTKWidget(QWidget):
     def reset_display(self):
         self.renWin.renderer.RemoveAllViewProps()
         self.display_mesh()
-
-    def evaluate_boundary(self):
-        """ Evaluates the boundary of the mesh and stores these parameters
-        in the .boundary."""
-        # Reset render window
-        self.vtk_widget.reset_display()
-        # Evaluates the boundary of the mesh
-        corners_flag: bool = True
-        corner_threshold: float = 130.0
-        self.mesh.evaluate_boundary(evaluate_corners=corners_flag,
-                                    corner_threshold=corner_threshold)
-        boundary_vertices, corners_vertices = self.mesh.get_boundary_coords()
-        num_boundaries = len(boundary_vertices)
-
-        self.update_info_box("The mesh boundary has been evaluated:")
-        self.update_info_box(f"\tDetected {num_boundaries} boundaries!")
-        for i, boundary in enumerate(boundary_vertices):
-            corner_vertices = corners_vertices[i]
-            self.update_info_box(f"\tBoundary B{i+1}:")
-            num_boundary_nodes = len(boundary)
-            self.update_info_box(f"\t\tDetected {num_boundary_nodes} boundary nodes!")
-            num_boundary_corners = len(corner_vertices) if corner_vertices is not None else 0
-            self.update_info_box(f"\t\tDetected {num_boundary_corners}" \
-                             + " corners with a threshold of" \
-                             + f" {corner_threshold} degrees!")
-
-            ## Visuals
-            # TODO: Make this a colour gradient so you can see the start, end, and direction
-            annotation = {"location":np.mean(boundary, axis=0),
-                      "text":f"B{i+1}"}
-            self.vtk_widget.visualise_boundary(boundary, index=i,
-                                    corners=corner_vertices, annotation=annotation)
 
 
 class LandmarkFinderWidget(QWidget):
@@ -1237,7 +1254,6 @@ class LandmarkFinderWidget(QWidget):
         annotation = {"location":np.mean(boundary_vertices, axis=0),
                       "text":f"B{boundary_index+1}"}
         self.vtk_widget.visualise_boundary(boundary_vertices, index=boundary_index, annotation=annotation)
-        
 
     def update_info_box(self, new_text):
         """ Adds a String to the info box to give a message about function completion to the user.
@@ -1258,7 +1274,6 @@ class progressBar(QMainWindow):
         # from doing anything else with the application.
         # TODO: have a look at QProgressDialog
         pass
-
 
 
 class fileManager(QWidget):
@@ -1317,6 +1332,7 @@ class fileManager(QWidget):
     def deleteRow(self, row):
         self.table.removeRow(row)
         self.n = self.table.rowCount()
+
 
 def show_message(message, message_type="err", title="An Error Occured..."):
     """

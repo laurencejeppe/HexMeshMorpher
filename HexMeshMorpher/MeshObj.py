@@ -311,6 +311,7 @@ class TriMesh(Mesh):
 
         ordered_node_array = self.get_ordered_node_array()
 
+        self.boundaries = []
         for i, node_array in enumerate(ordered_node_array):
             boundary = Boundary()
             boundary.nodes = node_array
