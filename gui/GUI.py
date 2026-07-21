@@ -303,7 +303,7 @@ class MeshMorpherGUI(QMainWindow):
         self.amberg_nricp.show()
 
     def run_amberg_mapping2(self):
-        self.amberg_nricp = AmbergMappingDialogTabbed(self) # AmbergMappingDialog(self) is the old version
+        self.amberg_nricp = AmbergDialogModular(self) # AmbergMappingDialog(self) is the old version
         self.amberg_nricp.show()
 
     def run_rbf_morpher(self):
@@ -406,7 +406,7 @@ class MeshOptionsDialog(QDialog):
         return self.mesh
 
 
-class AmbergMappingDialogTabbed(QDialog):
+class AmbergDialogModular(QDialog):
     """Creates a QDilog to perform the amberg mapping algorithm."""
     def __init__(self, parent = None):
         super().__init__(parent)
@@ -444,7 +444,7 @@ class AmbergMappingDialogTabbed(QDialog):
             self.reject()
 
     def select_landmarks(self):
-        landmark_selection_dialog = LandmarkSelectionDialog(self.source, self.target)
+        landmark_selection_dialog = LandmarkSelectionDialog(self.source, self.target, self)
         if landmark_selection_dialog.exec():
             print("Yes!!!")
 
@@ -1008,7 +1008,8 @@ class LandmarkFinderDialog(QDialog):
         self.setModal(True)
         self.setWindowTitle("Landmark Finder")
         main_layout = QGridLayout()
-        landmark_finder_widget = LandmarkFinderWidget(mesh)
+        #landmark_finder_widget = LandmarkFinderWidget(mesh)
+        landmark_finder_widget = LandmarkVTKWidget(mesh, self)
         main_layout.addWidget(landmark_finder_widget)
         self.setLayout(main_layout)
 
@@ -1018,49 +1019,53 @@ class LandmarkSelectionDialog(QDialog):
         super().__init__(parent)
         self.setModal(True)
         self.setWindowTitle("Landmark Selection")
-        main_layout = QVBoxLayout()
+        main_layout = QGridLayout()
 
-        mesh_layout = QHBoxLayout()
+        
         # TODO: Bug fix, for some reason the vtk widgets don't let you move the mesh here
         # But when you use the LandmarkVTKWidget from the other landmark finder they work fine.
-        source_vtk_widget = LandmarkVTKWidget(source, self)
+        self.source_vtk_widget = LandmarkVTKWidget(source, self)
         index = 0
 
         source_boundaries_vertices, source_boundaries_corner_vertices = self.evaluate_boundary(source)
-        #for source_boundary_vertices, source_corner_vertices in zip(source_boundaries_vertices,
-        #                                                            source_boundaries_corner_vertices):
-        #    annotation = {"location":np.mean(source_boundary_vertices, axis=0),
-        #                  "text":f"B{index+1}"}
-        #    source_vtk_widget.visualise_boundary(source_boundary_vertices,
-        #                                         index,
-        #                                         source_corner_vertices,
-        #                                         annotation)
-        #    index += 1
-        mesh_layout.addWidget(source_vtk_widget)
+        for source_boundary_vertices, source_corner_vertices in zip(source_boundaries_vertices,
+                                                                    source_boundaries_corner_vertices):
+            annotation = {"location":np.mean(source_boundary_vertices, axis=0),
+                          "text":f"B{index+1}"}
+            self.source_vtk_widget.visualise_boundary(source_boundary_vertices,
+                                                 index,
+                                                 source_corner_vertices,
+                                                 annotation)
+            index += 1
+        main_layout.addWidget(self.source_vtk_widget, 0, 0)
 
-        #target_vtk_widget = LandmarkVTKWidget(target, self)
-        #index = 0
+        self.target_vtk_widget = LandmarkVTKWidget(target, self)
+        index = 0
 
-        #target_boundaries_vertices, target_boundaries_corner_vertices =  self.evaluate_boundary(target)
-        #for target_boundary_vertices, target_corner_vertices in zip(target_boundaries_vertices,
-        #                                                            target_boundaries_corner_vertices):
-        #    annotation = {"location":np.mean(source_boundary_vertices, axis=0),
-        #                  "text":f"B{index+1}"}
-        #    target_vtk_widget.visualise_boundary(target_boundary_vertices,
-        #                                         index,
-        #                                         target_corner_vertices,
-        #                                         annotation)
-        #    index += 1        
-        #mesh_layout.addWidget(target_vtk_widget)
-
-        main_layout.addLayout(mesh_layout)
+        target_boundaries_vertices, target_boundaries_corner_vertices =  self.evaluate_boundary(target)
+        for target_boundary_vertices, target_corner_vertices in zip(target_boundaries_vertices,
+                                                                    target_boundaries_corner_vertices):
+            annotation = {"location":np.mean(source_boundary_vertices, axis=0),
+                          "text":f"B{index+1}"}
+            self.target_vtk_widget.visualise_boundary(target_boundary_vertices,
+                                                 index,
+                                                 target_corner_vertices,
+                                                 annotation)
+            index += 1        
+        main_layout.addWidget(self.target_vtk_widget, 0, 1)
 
         self.setLayout(main_layout)
 
-        self.resize(600, 600)
+        #self.resize(600, 600)
 
         # TODO: Add output of evaluations and how you want to match up the boundaries
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.source_vtk_widget.vtkWidget.update()
+        self.target_vtk_widget.vtkWidget.update()
+        self.source_vtk_widget.vtkWidget.GetRenderWindow().Render()
+        self.target_vtk_widget.vtkWidget.GetRenderWindow().Render()
 
     def evaluate_boundary(self, mesh):
         """ Evaluates the boundary of the mesh and stores these parameters
@@ -1086,7 +1091,7 @@ class LandmarkVTKWidget(QWidget):
 
         # Visualisation of the mesh
         self.vtkWidget = qtVtkWindow()
-        self.renWin = self.vtkWidget._RenderWindow
+        self.renWin = self.vtkWidget.GetRenderWindow()
         self.renWin.setBackground([0.6,0.6,0.6])
 
         self.display_mesh()
@@ -1136,6 +1141,7 @@ class LandmarkVTKWidget(QWidget):
 
         self.renWin.renderActor(mesh_actor)
         self.renWin.addTriad(mesh_actor)
+        self.renWin.finishScene()
 
     def reset_display(self):
         self.renWin.renderer.RemoveAllViewProps()

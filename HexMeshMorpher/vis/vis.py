@@ -33,8 +33,10 @@ class vtkRenWin(vtk.vtkRenderWindow):
         """
         self.renderer.SetBackground(colour)
 
-    def renderActor(self, actor, zoom=1.0):
+    def renderActor(self, actor):
         self.renderer.AddActor(actor)
+
+    def finishScene(self, zoom=1.0):
         self.renderer.ResetCamera()
         self.renderer.GetActiveCamera().Zoom(zoom)
         self.Render()
@@ -59,7 +61,6 @@ class vtkRenWin(vtk.vtkRenderWindow):
             ax.GetTextActor().GetTextProperty().ItalicOff()
             ax.GetTextActor().GetTextProperty().SetFontSize(8)
         self.renderer.AddActor(self.triad)
-        self.Render()
 
 class qtVtkWindow(QVTKRenderWindowInteractor):
     """
@@ -69,7 +70,8 @@ class qtVtkWindow(QVTKRenderWindowInteractor):
         super().__init__(rw=vtkRenWin())
         self.style = vtk.vtkInteractorStyleTrackballCamera()
         self.SetInteractorStyle(self.style)
-        self.iren = self._RenderWindow.GetInteractor()
+        render_window = self.GetRenderWindow()
+        self.iren = render_window.GetInteractor()
         self.iren.Initialize()
 
 # Adapt the MeshActor class to work with all mesh objects, not just trimesh
