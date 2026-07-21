@@ -1047,15 +1047,11 @@ class LandmarkSelectionDialog(QDialog):
         target_boundaries_vertices, target_boundaries_corner_vertices =  self.evaluate_boundary(target)
         
         target_boundary_resampled_vertices = []
-
-        print(target_boundaries_vertices)
         
         for i in range(len(target_boundaries_vertices)):
             source_boundary_length = source_boundary_lengths[i]
-            #print(source_boundary_length)
             resampled_boundary = self.resample_boundary(target, source_boundary_length, i)
             target_boundary_resampled_vertices.append(resampled_boundary)
-            print(resampled_boundary)
             annotation = {"location":np.mean(resampled_boundary, axis=0),
                           "text":f"B{i+1}"}
             self.target_vtk_widget.visualise_boundary(resampled_boundary, i, annotation=annotation)
