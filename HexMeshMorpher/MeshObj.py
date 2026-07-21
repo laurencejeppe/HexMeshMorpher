@@ -27,8 +27,8 @@ class Boundary():
     num_nodes: int = None
     corner_nodes: list = None
     corner_node_angle_threshold: float = None
-    interpollation_coords: np.ndarray = None
-    interpollation_num: np.ndarray = None
+    interpolation_coords: np.ndarray = None
+    interpolation_num: np.ndarray = None
 
 
 class Mesh(ABC):
@@ -534,7 +534,7 @@ class TriMesh(Mesh):
         return axis
 
     def get_resampled_boundary_nodes(self, index:int=None):
-        return self.boundary[index].interpolation_coords
+        return self.boundaries[index].interpolation_coords
 
     def resample_boundary_nodes(self, num_nodes, ccw_flag: bool = False,
                                 ignore_corners: bool = False, boundary_index: int=0,
@@ -591,12 +591,12 @@ class TriMesh(Mesh):
 
             interp_array = self.resample_nodes(coords, num_nodes + 1)
 
-        self.boundaries[boundary_index].interpollation_coords = interp_array[:-1]
+        self.boundaries[boundary_index].interpolation_coords = interp_array[:-1]
         # You should only do this if your edge is very close to the value your a fixing it as.
         if fixed_y is not None:
-            self.boundaries[boundary_index].interpollation_coords[:,1] = fixed_y # This offsets all the landmark coords at the boundary to a specific value. It assumes this is in the zx-plane so fixes y values.
-        self.boundaries[boundary_index].interpollation_num = num_nodes
-        return self.boundaries[boundary_index].interpollation_coords
+            self.boundaries[boundary_index].interpolation_coords[:,1] = fixed_y # This offsets all the landmark coords at the boundary to a specific value. It assumes this is in the zx-plane so fixes y values.
+        self.boundaries[boundary_index].interpolation_num = num_nodes
+        return self.boundaries[boundary_index].interpolation_coords
 
     def scale_mesh(self, factor):
         """ Scales the mesh by a given factor. """

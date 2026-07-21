@@ -8,7 +8,7 @@ Created on Wed Apr  5 19:29:14 2023
 import sys
 import colorsys
 import os
-from PyQt6.QtCore import (Qt, pyqtSignal, QThread)
+from PyQt6.QtCore import (Qt, pyqtSignal, QThread, QTimer)
 from PyQt6.QtGui import (QIcon, QAction)
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QVBoxLayout, QComboBox, QPushButton, QHBoxLayout,
@@ -1026,6 +1026,7 @@ class LandmarkSelectionDialog(QDialog):
         # But when you use the LandmarkVTKWidget from the other landmark finder they work fine.
         self.source_vtk_widget = LandmarkVTKWidget(source, self)
         index = 0
+        source_boundary_lengths = []
 
         source_boundaries_vertices, source_boundaries_corner_vertices = self.evaluate_boundary(source)
         for source_boundary_vertices, source_corner_vertices in zip(source_boundaries_vertices,
@@ -1036,6 +1037,7 @@ class LandmarkSelectionDialog(QDialog):
                                                  index,
                                                  source_corner_vertices,
                                                  annotation)
+            source_boundary_lengths.append(len(source_boundary_vertices))
             index += 1
         main_layout.addWidget(self.source_vtk_widget, 0, 0)
 
@@ -1043,27 +1045,45 @@ class LandmarkSelectionDialog(QDialog):
         index = 0
 
         target_boundaries_vertices, target_boundaries_corner_vertices =  self.evaluate_boundary(target)
-        for target_boundary_vertices, target_corner_vertices in zip(target_boundaries_vertices,
-                                                                    target_boundaries_corner_vertices):
-            annotation = {"location":np.mean(source_boundary_vertices, axis=0),
-                          "text":f"B{index+1}"}
-            self.target_vtk_widget.visualise_boundary(target_boundary_vertices,
-                                                 index,
-                                                 target_corner_vertices,
-                                                 annotation)
-            index += 1        
+        
+        target_boundary_resampled_vertices = []
+
+        print(target_boundaries_vertices)
+        
+        for i in range(len(target_boundaries_vertices)):
+            source_boundary_length = source_boundary_lengths[i]
+            #print(source_boundary_length)
+            resampled_boundary = self.resample_boundary(target, source_boundary_length, i)
+            target_boundary_resampled_vertices.append(resampled_boundary)
+            print(resampled_boundary)
+            annotation = {"location":np.mean(resampled_boundary, axis=0),
+                          "text":f"B{i+1}"}
+            self.target_vtk_widget.visualise_boundary(resampled_boundary, i, annotation=annotation)
+        
+        
+        #for target_boundary_vertices, target_corner_vertices in zip(target_boundaries_vertices,
+        #                                                            target_boundaries_corner_vertices):
+        #    annotation = {"location":np.mean(source_boundary_vertices, axis=0),
+        #                  "text":f"B{index+1}"}
+        #    self.target_vtk_widget.visualise_boundary(target_boundary_vertices,
+        #                                         index,
+        #                                         target_corner_vertices,
+        #                                         annotation)
+        #    index += 1        
         main_layout.addWidget(self.target_vtk_widget, 0, 1)
 
         self.setLayout(main_layout)
 
-        #self.resize(600, 600)
+        self.resize(600, 600)
 
         # TODO: Add output of evaluations and how you want to match up the boundaries
 
     def showEvent(self, event):
         super().showEvent(event)
-        self.source_vtk_widget.vtkWidget.update()
-        self.target_vtk_widget.vtkWidget.update()
+
+        QTimer.singleShot(0, self.initial_render)
+
+    def initial_render(self):
         self.source_vtk_widget.vtkWidget.GetRenderWindow().Render()
         self.target_vtk_widget.vtkWidget.GetRenderWindow().Render()
 
@@ -1077,6 +1097,19 @@ class LandmarkSelectionDialog(QDialog):
                                corner_threshold=corner_threshold)
         boundary_vertices, corners_vertices = mesh.get_boundary_coords()
         return boundary_vertices, corners_vertices
+    
+    def resample_boundary(self, mesh, num_nodes, index):
+        """ Resampls the boundary of the mesh. """
+        print("Boundary is being resampled!")
+
+        mesh.resample_boundary_nodes(num_nodes,
+                                     ccw_flag=False,
+                                     ignore_corners=True,
+                                     boundary_index=index,
+                                     fixed_y=None)
+        
+        interpolation_coords = mesh.get_resampled_boundary_nodes(index) 
+        return interpolation_coords
 
 
 class LandmarkVTKWidget(QWidget):
