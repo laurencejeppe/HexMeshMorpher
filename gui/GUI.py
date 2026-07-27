@@ -16,7 +16,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QFileDialog,
                              QGridLayout, QMessageBox, QLineEdit, QLabel,
                              QHeaderView, QDoubleSpinBox, QSpinBox,
                              QAbstractSpinBox, QStyle, QDialog, QProgressBar,
-                             QTextEdit, QDialogButtonBox, QTabWidget)
+                             QTextEdit, QDialogButtonBox, QTabWidget,
+                             QDialogButtonBox)
 
 import numpy as np
 import vtk
@@ -420,14 +421,25 @@ class AmbergDialogModular(QDialog):
         self.source: TriMesh = None
         
         main_layout = QVBoxLayout()
-        amberg_loop_options = AmbergMappingLoopOptionsWidget()
-        main_layout.addWidget(amberg_loop_options)
-        amberg_options = AmbergMappingOptionsWidget()
-        main_layout.addWidget(amberg_options)
+        self.amberg_loop_options = AmbergMappingLoopOptionsWidget()
+        main_layout.addWidget(self.amberg_loop_options)
+        self.amberg_options = AmbergMappingOptionsWidget()
+        main_layout.addWidget(self.amberg_options)
 
         select_landmarks_btn = QPushButton("Select Landmarks")
         select_landmarks_btn.clicked.connect(self.select_landmarks)
         main_layout.addWidget(select_landmarks_btn)
+
+        # Run amberg
+        run_amberg_btn = QPushButton("Run Amberg Mapping")
+        run_amberg_btn.clicked.connect(self.initiate_amberg)
+        main_layout.addWidget(run_amberg_btn)
+
+        # TODO: Have this as a pop up window that prevents you from doing
+        # other things while the amberg mapping is taking place.
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setRange(0,1)
+        main_layout.addWidget(self.progress_bar)
 
         self.setLayout(main_layout)
 
@@ -454,8 +466,69 @@ class AmbergDialogModular(QDialog):
     #    target_landmarks_tab = LandmarkFinderWidget(self.target)
     #    self.tab_widget.addTab(target_landmarks_tab, "Target Landmarks")
 
-    def initiate_amberg_mapping(self):
-        pass
+    def initiate_amberg(self):
+        description = f"Mapping from {self.source.name} to {self.target.name}"
+
+        base_name = 'MappedMesh'
+        output_name = base_name
+        number = 0
+        while output_name in self.parent.files:
+            number += 1
+            output_name = base_name + f'-{number}'
+
+        output = TriMesh(output_name,
+                         output_name,
+                         f_folder=self.WDIR,
+                         description=description,
+                         load=False)
+        output.set_units(self.source.units)
+
+        ## Get amberg options
+        steps = self.amberg_loop_options.get_loop_options()
+
+        options = self.amberg_options.get_options()
+
+        lpairs = []
+        if options["use_landmarks"]:
+            # This shouldn't be the way of doing this, but it works for now
+            # You should have the option here of getting landmarks pairs from a file
+            source_boundary_nodes = self.source.get_boundary_nodes()
+            source_vertex_count = [len(x) for x in source_boundary_nodes]
+            # This shouldn't be addressed here
+            
+            for k, target_boundary in enumerate(self.target.boundaries):
+                if target_boundary.interpolation_coords is not None and \
+                        target_boundary.interpolation_num == source_vertex_count[k]:
+                    lpairs.extend([
+                        [
+                            source_node,
+                            [target_boundary.interpolation_coords[i,j] for j in range(3)]
+                        ]
+                        for i, source_node in enumerate(source_boundary_nodes[k])
+                    ])
+                else:
+                    landmark_error = ("Landmark pairs were selected, but no suitable "
+                                  "landmark pairs were found for boundary {}!\nRun landmark finder "
+                                  "with {} boundary nodes on {}")
+                    show_message(message=landmark_error.format(k+1, source_vertex_count[k], self.target.f_name))
+
+        self.thread: AmbergThread = AmbergThread(source=self.source,
+                                   target=self.target,
+                                   output=output,
+                                   steps=steps,
+                                   options=options,
+                                   callback=self.handle_result,
+                                   lpairs=lpairs)
+        self.progress_bar.setRange(0,0)
+        self.thread.start()
+
+    def handle_result(self, result:AmbergMapping):
+        self.progress_bar.setRange(0,1)
+        output_mesh = result.mapped
+        self.parent.files[output_mesh.f_name] = output_mesh
+        self.parent.file_manager.addRow(output_mesh.f_name, output_mesh)
+        self.parent.filesDrop.append(output_mesh.f_name)
+        self.close()
 
 
 class AmbergMeshSelectionDialog(QDialog):
@@ -575,6 +648,15 @@ class AmbergMappingLoopOptionsWidget(QWidget):
         else:
             show_message(message="Please select a row to be deleted first!",
                          title="Delete Loop Error")
+            
+    def get_loop_options(self):
+        """Returns a list of the options to provide to the amberg mapping."""
+        rows = self.table.rowCount()
+        steps = [[None for i in range(4)] for j in range(rows)]
+        for row in range(rows):
+            for col in range(4):
+                steps[row][col] = float(self.table.item(row, col).text())
+        return steps
 
 
 class AmbergMappingOptionsWidget(QWidget):
@@ -724,11 +806,9 @@ class AmbergMappingDialog(QDialog):
                                  description=description,
                                  load=False)
         output.set_units(source.units)
-        rows = self.table.rowCount()
-        steps = [[None for i in range(4)] for j in range(rows)]
-        for row in range(rows):
-            for col in range(4):
-                steps[row][col] = float(self.table.item(row, col).text())
+
+        ## Get amberg options
+        steps = self.loop_options_widget.get_loop_options()
 
         options = self.options_widget.get_options()
 
@@ -738,15 +818,15 @@ class AmbergMappingDialog(QDialog):
             source_boundary_nodes = source.get_boundary_nodes()
             source_vertex_count = len(source_boundary_nodes)
             # This shouldn't be addressed here
-            if self.manual_landmark_selection_box.isChecked():
-                lpairs = self.manual_landmark_selection()
-                if lpairs is None:
-                    landmark_error = ("Landmark pairs were selected, but no suitable "
-                                  "landmark pairs were found in the file!\n")
-                    show_message(message=landmark_error)
-                    self.use_landmarks.setChecked(False)
-                    return
-            elif target.boundary.interpollation_coords is not None and \
+            #if self.manual_landmark_selection_box.isChecked():
+            #    lpairs = self.manual_landmark_selection()
+            #    if lpairs is None:
+            #        landmark_error = ("Landmark pairs were selected, but no suitable "
+            #                      "landmark pairs were found in the file!\n")
+            #        show_message(message=landmark_error)
+            #        self.use_landmarks.setChecked(False)
+            #        return
+            if target.boundary.interpollation_coords is not None and \
                 target.boundary.interpollation_num == source_vertex_count:
                 # print(target.boundary.interpollation_coords)
                 #source_vertex_count = len(source.get_boundary())
@@ -1021,9 +1101,7 @@ class LandmarkSelectionDialog(QDialog):
         self.setWindowTitle("Landmark Selection")
         main_layout = QGridLayout()
 
-        
-        # TODO: Bug fix, for some reason the vtk widgets don't let you move the mesh here
-        # But when you use the LandmarkVTKWidget from the other landmark finder they work fine.
+        ## Source Mesh
         self.source_vtk_widget = LandmarkVTKWidget(source, self)
         index = 0
         source_boundary_lengths = []
@@ -1041,6 +1119,7 @@ class LandmarkSelectionDialog(QDialog):
             index += 1
         main_layout.addWidget(self.source_vtk_widget, 0, 0)
 
+        ## Traget Mesh
         self.target_vtk_widget = LandmarkVTKWidget(target, self)
         index = 0
 
@@ -1056,7 +1135,7 @@ class LandmarkSelectionDialog(QDialog):
                           "text":f"B{i+1}"}
             self.target_vtk_widget.visualise_boundary(resampled_boundary, i, annotation=annotation)
         
-        
+        ## For displaying boundary nodes rather than resampled nodes
         #for target_boundary_vertices, target_corner_vertices in zip(target_boundaries_vertices,
         #                                                            target_boundaries_corner_vertices):
         #    annotation = {"location":np.mean(source_boundary_vertices, axis=0),
@@ -1067,6 +1146,13 @@ class LandmarkSelectionDialog(QDialog):
         #                                         annotation)
         #    index += 1        
         main_layout.addWidget(self.target_vtk_widget, 0, 1)
+
+        self.btn_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        self.btn_box.accepted.connect(self.accept)
+        self.btn_box.rejected.connect(self.reject)
+        main_layout.addWidget(self.btn_box, 1, 1)
 
         self.setLayout(main_layout)
 
