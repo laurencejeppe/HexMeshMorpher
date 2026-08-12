@@ -697,14 +697,14 @@ class INPMesh(Mesh):
 
         self.nodes = (
             np.array([[float(item.strip()) for item in line.split(',')]
-                      for line in node_list])
+                      for line in node_list if '*' not in line])
             )
 
         [elem_list, elem_end] = self.find_elements(elem_index + 1, data_list)
 
         self.elements = (
             np.array([[int(item.strip()) for item in line.split(',')]
-                      for line in elem_list])
+                      for line in elem_list if '*' not in line])
             )
 
         if len(data_list) == elem_end:
