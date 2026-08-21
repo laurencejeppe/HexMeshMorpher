@@ -165,6 +165,31 @@ class Mesh(ABC):
         angle = np.arccos(dot/(v1_mag*v2_mag))
         return angle
 
+    @staticmethod
+    def align_with_axis(vector_1, vector_2, point_1=(0,0,0), point_2=None):
+        """ Creates a transformation matrix that corresponds to the alignment of an axis with another axis.
+        Inputs:
+            vector_1:
+                Start vector for the transformation.
+            vector_2:
+                The target orientation of the transformation.
+            point_1:
+                This will be the axis of the rotation in the original frame.
+            point_2:
+                This will add a translation of point_1 to this point in space.
+        """
+        v1 = np.array(vector_1)
+        v2 = np.array(vector_2)
+        p1 = np.array(point_1)
+        rotation_axis = np.cross(v1, v2)
+        rotation_angle = tr.transformations.angle_between_vectors(v1, v2)
+        transformation_matrix = tr.transformations.rotation_matrix(rotation_angle, rotation_axis, p1)
+        if point_2 is not None:
+            p2 = np.array(point_2)
+            translation_matrix = tr.transformations.translation_matrix(p2-p1)
+            transformation_matrix = np.dot(translation_matrix, transformation_matrix)
+        return transformation_matrix
+
 
 # If you want rotation matrices use
 # trimesh.transformations.rotation_matrix(angle, direction, point=None)
