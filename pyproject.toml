@@ -16,6 +16,16 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+dependencies = [
+    "numpy>=2.2.5",
+    "rtree==1.4.0",
+    "scipy>=1.15.2",
+    "trimesh==4.6.8",
+    "vtk==9.6.2",
+]
+
+[project.optional-dependencies]
+gui = ["PyQt6"]
 
 [project.urls]
 Homepage = "https://github.com/laurencejeppe/HexMeshMopher"
