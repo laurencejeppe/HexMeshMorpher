@@ -767,8 +767,18 @@ class INPMesh(Mesh):
 
     def flip_normals(self):
         """ Flips the normals of the mesh by changing the order of the nodes in each element. """
-        for i, element in enumerate(self.elements):
-            self.elements[i][2:] = element[2:][::-1]
+        num_nodes = len(self.elements[0]) - 1
+        match num_nodes:
+            case 4 | 3:
+                for i, element in enumerate(self.elements):
+                    self.elements[i][2:] = element[2:][::-1]
+            case 8 | 6:
+                b = int(num_nodes/2)
+                for i, element in enumerate(self.elements):
+                    self.elements[i][2:b+1] = element[2:b+1][::-1]
+                    self.elements[i][b+1:] = element[b+1:][::-1]
+            case _:
+                raise ValueError("Unsupported number of nodes in element.")
 
     def find_elements(self, starting_index, data_list):
         """Finds the number of elements in the inp file. """
