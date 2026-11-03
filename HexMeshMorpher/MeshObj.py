@@ -91,6 +91,10 @@ class Mesh(ABC):
     @abstractmethod
     def scale_mesh(self, factor) -> None:
         raise NotImplementedError
+
+    @abstractmethod
+    def flip_normals(self) -> None:
+        raise NotImplementedError
     
     @staticmethod
     def resample_nodes(coords, num_nodes) -> np.ndarray:
@@ -627,6 +631,10 @@ class TriMesh(Mesh):
         """ Scales the mesh by a given factor. """
         self.trimesh.apply_scale(factor)
 
+    def flip_normals(self):
+        """ Flips the normals of the mesh by changing the order of the nodes in each face. """
+        self.trimesh.invert()
+
     def get_bounding_box(self) -> list:
         """
         Gets the xyz values of the centroid, range, maximum and minumum.
@@ -756,6 +764,11 @@ class INPMesh(Mesh):
         """
         for i, node in enumerate(self.nodes):
             self.nodes[i][1:] = node[1:]*factor
+
+    def flip_normals(self):
+        """ Flips the normals of the mesh by changing the order of the nodes in each element. """
+        for i, element in enumerate(self.elements):
+            self.elements[i][2:] = element[2:][::-1]
 
     def find_elements(self, starting_index, data_list):
         """Finds the number of elements in the inp file. """

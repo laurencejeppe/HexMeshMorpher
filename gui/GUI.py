@@ -115,6 +115,8 @@ class MeshMorpherGUI(QMainWindow):
                               self, triggered=self.run_rbf_morpher)
         self.findLandmarks = QAction(QIcon("open.png"), 'Find Landmakrs',
                                      self, triggered=self.find_landmarks)
+        self.invertNormals = QAction(QIcon("open.png"), 'Invert Normals',
+                                     self, triggered=self.invert_normals)
 
     def createMenus(self):
         """
@@ -133,6 +135,7 @@ class MeshMorpherGUI(QMainWindow):
         self.toolsMenu.addAction(self.runAmberg2)
         self.toolsMenu.addAction(self.runRBF)
         self.toolsMenu.addAction(self.findLandmarks)
+        self.toolsMenu.addAction(self.invertNormals)
 
     def chooseOpenFile(self, type_filter: str, prompt:str='Open File'):
         """ Opens the file dialog to select a file to open. """
@@ -332,6 +335,22 @@ class MeshMorpherGUI(QMainWindow):
             return
         self.landmark_finder = LandmarkFinderDialog(mesh=mesh, parent=self)
         self.landmark_finder.show()
+
+    def invert_normals(self):
+        if not self.file_manager.table.selectedItems():
+            show_message(message="Please select a mesh in the table to invert normals!",
+                         title="Item Selection Error")
+            return
+        rows = []
+        for item in self.file_manager.table.selectedItems():
+            rows.append(self.file_manager.table.row(item))
+        rows = set(rows)
+        for row in rows:
+            mesh_name = self.file_manager.table.item(row, 0).text()
+            mesh = self.files[mesh_name]
+            mesh.flip_normals()
+            show_message(message=f"Normals of {mesh_name} have been inverted.",
+                         title="Normals Inverted")
 
 
 class MeshOptionsDialog(QDialog):
